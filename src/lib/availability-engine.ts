@@ -128,6 +128,10 @@ export async function getAvailableSlots(params: {
     );
     const dayRules = rules.filter((r) => r.dayOfWeek === dayOfWeek);
 
+    console.log(`[availability] user=${userId}, date=${params.date}, dayOfWeek=${dayOfWeek}, tz=${schedule.timezone}`);
+    console.log(`[availability] all rules:`, rules.map(r => `${r.dayOfWeek}:${r.startTime}-${r.endTime}`));
+    console.log(`[availability] matching dayRules: ${dayRules.length}`);
+
     let windows: AvailabilityWindow[] = [];
 
     if (overrides.length > 0 && overrides.some((o) => !o.isBlocked && o.startTime && o.endTime)) {
@@ -144,12 +148,16 @@ export async function getAvailableSlots(params: {
       for (const rule of dayRules) {
         const start = localTimeToUTC(params.date, rule.startTime, schedule.timezone);
         const end = localTimeToUTC(params.date, rule.endTime, schedule.timezone);
+        console.log(`[availability] rule ${rule.startTime}-${rule.endTime} => UTC ${start.toISOString()}-${end.toISOString()}`);
         windows.push({ start, end });
       }
     }
 
+    console.log(`[availability] windows after rules: ${windows.length}`, windows.map(w => `${w.start.toISOString()}-${w.end.toISOString()}`));
+
     // Subtract busy periods from Google Calendar
     const userBusy = busyData.get(userId) || [];
+    console.log(`[availability] busy periods: ${userBusy.length}`, userBusy);
     for (const busy of userBusy) {
       windows = subtractPeriod(
         windows,
@@ -157,6 +165,7 @@ export async function getAvailableSlots(params: {
         new Date(busy.end)
       );
     }
+    console.log(`[availability] windows after busy subtraction: ${windows.length}`);
 
     // Subtract existing bookings (with buffer)
     const userBookings = existingBookings.filter(

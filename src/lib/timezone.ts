@@ -42,18 +42,29 @@ export function formatDateTimeInZone(
 }
 
 /**
- * Convert a local time string (HH:MM) on a specific date in a timezone to a UTC Date
+ * Convert a local time string (HH:MM) on a specific date in a timezone to a UTC Date.
+ *
+ * Example: localTimeToUTC("2026-03-01", "09:00", "Asia/Tokyo")
+ *   → 2026-03-01T00:00:00.000Z (because JST is UTC+9)
  */
 export function localTimeToUTC(
   dateStr: string, // YYYY-MM-DD
-  timeStr: string, // HH:MM
+  timeStr: string, // HH:MM or HH:MM:SS
   timezone: string
 ): Date {
-  // Create a date string in the specified timezone
-  const dateTimeStr = `${dateStr}T${timeStr}:00`;
+  // Normalize timeStr to HH:MM
+  const timeParts = timeStr.split(":");
+  const hours = parseInt(timeParts[0], 10);
+  const minutes = parseInt(timeParts[1], 10);
 
-  // Use Intl to get the UTC offset for this timezone at this date/time
-  const formatter = new Intl.DateTimeFormat("en-US", {
+  // Create a reference UTC date, then figure out what UTC time corresponds
+  // to the desired local time in the given timezone.
+
+  // Step 1: Start with a UTC date at midnight of the target date
+  const utcBase = new Date(`${dateStr}T00:00:00Z`);
+
+  // Step 2: Find what time it is in the target timezone when UTC is at midnight
+  const tzParts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     year: "numeric",
     month: "2-digit",
@@ -62,21 +73,36 @@ export function localTimeToUTC(
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
-  });
+  }).formatToParts(utcBase);
 
-  // Parse the local time and find the UTC equivalent
-  const localDate = new Date(dateTimeStr);
-  const utcDate = new Date(
-    localDate.toLocaleString("en-US", { timeZone: "UTC" })
-  );
-  const tzDate = new Date(
-    localDate.toLocaleString("en-US", { timeZone: timezone })
-  );
-  const offset = utcDate.getTime() - tzDate.getTime();
+  const tzHour = parseInt(tzParts.find((p) => p.type === "hour")!.value, 10);
+  const tzMinute = parseInt(tzParts.find((p) => p.type === "minute")!.value, 10);
+  const tzDay = parseInt(tzParts.find((p) => p.type === "day")!.value, 10);
+  const baseDay = parseInt(dateStr.split("-")[2], 10);
 
-  // Create the date in the target timezone
-  const targetDate = new Date(`${dateStr}T${timeStr}:00.000Z`);
-  return new Date(targetDate.getTime() - offset);
+  // Step 3: Calculate the offset in minutes
+  // When UTC is 00:00 on dateStr, timezone shows tzHour:tzMinute
+  // So offset = tzTime - utcTime (in minutes)
+  let offsetMinutes = tzHour * 60 + tzMinute;
+
+  // Handle day boundary: if timezone is ahead (e.g., JST = UTC+9),
+  // at UTC midnight the local time is in the same day but ahead
+  // If timezone is behind (e.g., PST = UTC-8), local day might be previous day
+  if (tzDay > baseDay) {
+    // Timezone is ahead, add nothing special
+  } else if (tzDay < baseDay) {
+    // Timezone is behind UTC, offset is negative
+    offsetMinutes = offsetMinutes - 24 * 60;
+  }
+
+  // Step 4: The desired UTC time = desired_local_time - offset
+  const desiredLocalMinutes = hours * 60 + minutes;
+  const utcMinutes = desiredLocalMinutes - offsetMinutes;
+
+  const result = new Date(`${dateStr}T00:00:00Z`);
+  result.setUTCMinutes(result.getUTCMinutes() + utcMinutes);
+
+  return result;
 }
 
 /**

@@ -95,9 +95,11 @@ export async function getMultiUserFreeBusy(
       try {
         const busy = await getFreeBusy(userId, timeMin, timeMax);
         results.set(userId, busy);
-      } catch {
-        // If we can't get a user's calendar, treat them as fully busy
-        results.set(userId, [{ start: timeMin, end: timeMax }]);
+      } catch (error) {
+        console.error(`Failed to get FreeBusy for user ${userId}:`, error);
+        // If we can't get a user's calendar, treat them as FREE (empty busy list)
+        // so that availability still shows up even if Google Calendar API fails
+        results.set(userId, []);
       }
     })
   );
