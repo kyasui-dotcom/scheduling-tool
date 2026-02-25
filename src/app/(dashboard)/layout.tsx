@@ -35,6 +35,12 @@ export default async function DashboardLayout({
                 イベントタイプ
               </Link>
               <Link
+                href="/members"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                メンバー
+              </Link>
+              <Link
                 href="/availability"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >

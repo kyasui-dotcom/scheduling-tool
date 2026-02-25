@@ -14,11 +14,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MemberPicker } from "@/components/member-picker";
 import { toast } from "sonner";
+
+interface Member {
+  id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+  username: string | null;
+}
 
 export default function NewEventPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [selectedMembers, setSelectedMembers] = useState<Member[]>([]);
   const [form, setForm] = useState({
     title: "",
     slug: "",
@@ -60,10 +70,15 @@ export default function NewEventPage() {
     setSaving(true);
 
     try {
+      const payload = {
+        ...form,
+        memberUserIds: selectedMembers.map((m) => m.id),
+      };
+
       const res = await fetch("/api/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -223,7 +238,7 @@ export default function NewEventPage() {
               </Select>
               <p className="text-xs text-muted-foreground mt-1">
                 {form.schedulingMode === "specific_person" &&
-                  "登録メンバーの空き時間だけを先方に提示します"}
+                  "あなたの空き時間だけを先方に提示します（1人用）"}
                 {form.schedulingMode === "any_available" &&
                   "メンバーの誰か1人でも空いていれば選択可能。予約時に自動割り当て。"}
                 {form.schedulingMode === "all_available" &&
@@ -232,6 +247,22 @@ export default function NewEventPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Team Members Card - only shown for multi-person modes */}
+        {form.schedulingMode !== "specific_person" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">チームメンバー</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MemberPicker
+                selectedMembers={selectedMembers}
+                onMembersChange={setSelectedMembers}
+                schedulingMode={form.schedulingMode}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

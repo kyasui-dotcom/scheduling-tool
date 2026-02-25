@@ -15,7 +15,16 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { MemberPicker } from "@/components/member-picker";
 import { toast } from "sonner";
+
+interface Member {
+  id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+  username: string | null;
+}
 
 export default function EditEventPage({
   params,
@@ -27,6 +36,8 @@ export default function EditEventPage({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedMembers, setSelectedMembers] = useState<Member[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [form, setForm] = useState({
     title: "",
     slug: "",
@@ -62,6 +73,27 @@ export default function EditEventPage({
             minNoticeMinutes: data.minNoticeMinutes || 60,
             maxAdvanceDays: data.maxAdvanceDays || 60,
           });
+
+          // Store the owner user id
+          setCurrentUserId(data.userId);
+
+          // Load member details if there are members beyond the owner
+          if (data.members && data.members.length > 0) {
+            const otherMemberIds = data.members
+              .filter((m: { userId: string }) => m.userId !== data.userId)
+              .map((m: { userId: string }) => m.userId);
+
+            if (otherMemberIds.length > 0) {
+              // Fetch member details
+              const memberRes = await fetch(
+                `/api/users/details?ids=${otherMemberIds.join(",")}`
+              );
+              if (memberRes.ok) {
+                const memberData = await memberRes.json();
+                setSelectedMembers(memberData);
+              }
+            }
+          }
         }
       } catch {
         toast.error("読み込みに失敗しました");
@@ -80,10 +112,15 @@ export default function EditEventPage({
     e.preventDefault();
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        memberUserIds: selectedMembers.map((m) => m.id),
+      };
+
       const res = await fetch(`/api/events/${eventId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         toast.success("更新しました");
@@ -268,9 +305,33 @@ export default function EditEventPage({
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {form.schedulingMode === "specific_person" &&
+                  "あなたの空き時間だけを先方に提示します（1人用）"}
+                {form.schedulingMode === "any_available" &&
+                  "メンバーの誰か1人でも空いていれば選択可能。予約時に自動割り当て。"}
+                {form.schedulingMode === "all_available" &&
+                  "全メンバーが空いている時間のみ選択可能。"}
+              </p>
             </div>
           </CardContent>
         </Card>
+
+        {/* Team Members Card - only shown for multi-person modes */}
+        {form.schedulingMode !== "specific_person" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">チームメンバー</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MemberPicker
+                selectedMembers={selectedMembers}
+                onMembersChange={setSelectedMembers}
+                schedulingMode={form.schedulingMode}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
