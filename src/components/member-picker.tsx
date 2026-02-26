@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 interface Member {
@@ -28,6 +27,7 @@ export function MemberPicker({
   const [searchResults, setSearchResults] = useState<Member[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -36,10 +36,12 @@ export function MemberPicker({
     async (query: string) => {
       if (query.length < 2) {
         setSearchResults([]);
+        setHasSearched(false);
         return;
       }
 
       setIsSearching(true);
+      setHasSearched(false);
       try {
         const res = await fetch(
           `/api/users/search?q=${encodeURIComponent(query)}`
@@ -56,6 +58,7 @@ export function MemberPicker({
         console.error("Search failed");
       } finally {
         setIsSearching(false);
+        setHasSearched(true);
       }
     },
     [selectedMembers]
@@ -72,6 +75,7 @@ export function MemberPicker({
       }, 300);
     } else {
       setSearchResults([]);
+      setHasSearched(false);
     }
 
     return () => {
@@ -100,6 +104,7 @@ export function MemberPicker({
     setSearchQuery("");
     setSearchResults([]);
     setShowDropdown(false);
+    setHasSearched(false);
     inputRef.current?.focus();
   }
 
@@ -111,17 +116,20 @@ export function MemberPicker({
     return null;
   }
 
+  const showNoResults =
+    showDropdown && hasSearched && !isSearching && searchResults.length === 0 && searchQuery.length >= 2;
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium">チームメンバー</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {schedulingMode === "any_available"
-              ? "メンバーの誰かが空いていれば予約可能です。予約時に自動でアサインされます。"
-              : "全メンバーが空いている時間帯のみ予約可能になります。"}
-          </p>
-        </div>
+      <div>
+        <p className="text-xs text-muted-foreground">
+          {schedulingMode === "any_available"
+            ? "メンバーの誰かが空いていれば予約可能です。予約時に自動でアサインされます。"
+            : "全メンバーが空いている時間帯のみ予約可能になります。"}
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          ※ このアプリにGoogleでサインイン済みのユーザーのみ追加できます
+        </p>
       </div>
 
       {/* Selected members */}
@@ -177,27 +185,25 @@ export function MemberPicker({
         <Input
           ref={inputRef}
           type="text"
-          placeholder="メールアドレスまたは名前で検索..."
+          placeholder="メンバーのメールアドレスまたは名前で検索..."
           value={searchQuery}
           onChange={(e) => {
             setSearchQuery(e.target.value);
             setShowDropdown(true);
           }}
           onFocus={() => {
-            if (searchResults.length > 0) {
-              setShowDropdown(true);
-            }
+            setShowDropdown(true);
           }}
         />
 
         {/* Search results dropdown */}
-        {showDropdown && (searchResults.length > 0 || isSearching) && (
+        {showDropdown && (searchResults.length > 0 || isSearching || showNoResults) && (
           <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-48 overflow-y-auto">
             {isSearching ? (
               <div className="p-3 text-sm text-muted-foreground text-center">
                 検索中...
               </div>
-            ) : (
+            ) : searchResults.length > 0 ? (
               searchResults.map((user) => (
                 <button
                   key={user.id}
@@ -226,15 +232,16 @@ export function MemberPicker({
                   </div>
                 </button>
               ))
+            ) : (
+              <div className="p-3 text-center">
+                <p className="text-sm text-muted-foreground">
+                  該当するユーザーが見つかりません
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  追加したいメンバーに先にこのアプリへGoogleサインインしてもらってください
+                </p>
+              </div>
             )}
-
-            {!isSearching &&
-              searchResults.length === 0 &&
-              searchQuery.length >= 2 && (
-                <div className="p-3 text-sm text-muted-foreground text-center">
-                  ユーザーが見つかりません
-                </div>
-              )}
           </div>
         )}
       </div>
