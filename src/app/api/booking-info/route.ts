@@ -46,5 +46,6 @@ export async function GET(req: NextRequest) {
     eventTypeId: eventType.id,
     title: eventType.title,
     durationMinutes: eventType.durationMinutes,
+    customQuestions: eventType.customQuestions || [],
   });
 }

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmbedDialog } from "@/components/embed-dialog";
 
 export default async function EventsPage() {
   const session = await auth();
@@ -126,6 +127,11 @@ export default async function EventsPage() {
                           プレビュー
                         </Link>
                       </Button>
+                      <EmbedDialog
+                        username={user?.username || ""}
+                        slug={event.slug}
+                        appUrl={appUrl}
+                      />
                     </div>
                   </div>
                 </CardContent>

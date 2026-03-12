@@ -38,6 +38,9 @@ export default function EditEventPage({
   const [loading, setLoading] = useState(true);
   const [selectedMembers, setSelectedMembers] = useState<Member[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [customQuestions, setCustomQuestions] = useState<
+    Array<{ id: string; question: string; required: boolean }>
+  >([]);
   const [form, setForm] = useState({
     title: "",
     slug: "",
@@ -74,8 +77,11 @@ export default function EditEventPage({
             maxAdvanceDays: data.maxAdvanceDays || 60,
           });
 
-          // Store the owner user id
+          // Store the owner user id and custom questions
           setCurrentUserId(data.userId);
+          if (data.customQuestions) {
+            setCustomQuestions(data.customQuestions);
+          }
 
           // Load member details if there are members beyond the owner
           if (data.members && data.members.length > 0) {
@@ -115,6 +121,7 @@ export default function EditEventPage({
       const payload = {
         ...form,
         memberUserIds: selectedMembers.map((m) => m.id),
+        customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
       };
 
       const res = await fetch(`/api/events/${eventId}`, {
@@ -332,6 +339,67 @@ export default function EditEventPage({
             </CardContent>
           </Card>
         )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">カスタム質問</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              予約時にゲストに回答してもらう質問を追加できます
+            </p>
+            {customQuestions.map((q, index) => (
+              <div key={q.id} className="flex items-start gap-2 bg-muted p-3 rounded-lg">
+                <div className="flex-1 space-y-2">
+                  <Input
+                    value={q.question}
+                    onChange={(e) => {
+                      const updated = [...customQuestions];
+                      updated[index].question = e.target.value;
+                      setCustomQuestions(updated);
+                    }}
+                    placeholder="質問を入力..."
+                  />
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={q.required}
+                      onChange={(e) => {
+                        const updated = [...customQuestions];
+                        updated[index].required = e.target.checked;
+                        setCustomQuestions(updated);
+                      }}
+                    />
+                    必須
+                  </label>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCustomQuestions(customQuestions.filter((_, i) => i !== index));
+                  }}
+                >
+                  ✕
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCustomQuestions([
+                  ...customQuestions,
+                  { id: crypto.randomUUID(), question: "", required: false },
+                ]);
+              }}
+            >
+              + 質問を追加
+            </Button>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

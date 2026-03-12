@@ -17,6 +17,15 @@ export const createEventTypeSchema = z.object({
   minNoticeMinutes: z.number().int().min(0).optional(),
   maxAdvanceDays: z.number().int().min(1).max(365).optional(),
   memberUserIds: z.array(z.string()).optional(),
+  customQuestions: z
+    .array(
+      z.object({
+        id: z.string(),
+        question: z.string().min(1),
+        required: z.boolean(),
+      })
+    )
+    .optional(),
 });
 
 export const updateEventTypeSchema = createEventTypeSchema.partial();

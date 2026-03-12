@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { buildGoogleCalendarUrl } from "@/lib/ics-generator";
+import { generateGuestToken } from "@/lib/guest-token";
 
 export default async function BookingSuccessPage({
   params,
@@ -60,6 +61,10 @@ export default async function BookingSuccessPage({
     location: booking.meetingUrl || undefined,
   });
 
+  const guestToken = generateGuestToken(bookingId, booking.guestEmail);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const manageUrl = `${appUrl}/booking-manage/${bookingId}?token=${guestToken}`;
+
   return (
     <div className="min-h-screen flex items-center justify-center py-8 px-4">
       <div className="w-full max-w-md">
@@ -107,9 +112,7 @@ export default async function BookingSuccessPage({
             )}
 
             <div className="space-y-2">
-              <h4 className="text-sm font-medium">
-                カレンダーに追加
-              </h4>
+              <h4 className="text-sm font-medium">カレンダーに追加</h4>
               <div className="flex flex-col gap-2">
                 <Button asChild variant="outline" className="w-full">
                   <a
@@ -129,6 +132,16 @@ export default async function BookingSuccessPage({
                   </a>
                 </Button>
               </div>
+            </div>
+
+            <div className="border-t pt-4 space-y-2">
+              <h4 className="text-sm font-medium">予約の変更・キャンセル</h4>
+              <Button asChild variant="ghost" size="sm" className="w-full">
+                <a href={manageUrl}>予約の変更・キャンセルはこちら</a>
+              </Button>
+              <p className="text-[10px] text-muted-foreground text-center">
+                ※ このリンクをブックマークしておくと後から変更できます
+              </p>
             </div>
 
             <div className="text-center text-xs text-muted-foreground">

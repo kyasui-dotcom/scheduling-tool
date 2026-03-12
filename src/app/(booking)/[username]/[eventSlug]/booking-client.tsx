@@ -69,14 +69,19 @@ export function BookingClient({ eventType, organizer }: Props) {
   }, [selectedDate, fetchSlots]);
 
   function handleSelectSlot(slot: TimeSlot) {
+    const pathParts = window.location.pathname.split("/");
+    const eventSlug = pathParts[pathParts.length - 1];
     const params = new URLSearchParams({
       slot: slot.startTime,
       timezone,
     });
-    router.push(`/${organizer.username}/${eventType.id}/confirm?${params}`);
-    // Use eventSlug from URL for the confirm page
-    const pathParts = window.location.pathname.split("/");
-    const eventSlug = pathParts[pathParts.length - 1];
+    // Pass reschedule params if present
+    const urlParams = new URLSearchParams(window.location.search);
+    const rescheduleId = urlParams.get("reschedule");
+    const rescheduleToken = urlParams.get("token");
+    if (rescheduleId) params.set("reschedule", rescheduleId);
+    if (rescheduleToken) params.set("token", rescheduleToken);
+
     router.push(
       `/${organizer.username}/${eventSlug}/confirm?${params}`
     );

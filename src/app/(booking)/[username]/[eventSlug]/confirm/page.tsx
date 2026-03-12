@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+
+interface CustomQuestion {
+  id: string;
+  question: string;
+  required: boolean;
+}
 
 export default function ConfirmBookingPage({
   params,
@@ -20,14 +26,36 @@ export default function ConfirmBookingPage({
 
   const slotStart = searchParams.get("slot");
   const timezone = searchParams.get("timezone") || "Asia/Tokyo";
-  const eventTypeId = searchParams.get("eventTypeId") || "";
+  const rescheduleId = searchParams.get("reschedule");
+  const rescheduleToken = searchParams.get("token");
 
   const [form, setForm] = useState({
     guestName: "",
     guestEmail: "",
     guestNotes: "",
   });
+  const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    async function loadEventInfo() {
+      try {
+        const res = await fetch(
+          `/api/booking-info?username=${username}&slug=${eventSlug}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.customQuestions && data.customQuestions.length > 0) {
+            setCustomQuestions(data.customQuestions);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    loadEventInfo();
+  }, [username, eventSlug]);
 
   if (!slotStart) {
     return (
@@ -55,8 +83,6 @@ export default function ConfirmBookingPage({
     setSubmitting(true);
 
     try {
-      // First, we need to get the eventTypeId from the URL
-      // Fetch event type info using username and slug
       const eventRes = await fetch(
         `/api/booking-info?username=${username}&slug=${eventSlug}`
       );
@@ -65,6 +91,25 @@ export default function ConfirmBookingPage({
         return;
       }
       const eventData = await eventRes.json();
+
+      const guestAnswers = customQuestions
+        .filter((q) => answers[q.id])
+        .map((q) => ({
+          questionId: q.id,
+          answer: answers[q.id],
+        }));
+
+      // If rescheduling, cancel old booking first
+      if (rescheduleId && rescheduleToken) {
+        await fetch(`/api/bookings/${rescheduleId}/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason: "リスケジュール",
+            token: rescheduleToken,
+          }),
+        });
+      }
 
       const res = await fetch("/api/bookings", {
         method: "POST",
@@ -76,6 +121,7 @@ export default function ConfirmBookingPage({
           guestEmail: form.guestEmail,
           guestTimezone: timezone,
           guestNotes: form.guestNotes || undefined,
+          guestAnswers: guestAnswers.length > 0 ? guestAnswers : undefined,
         }),
       });
 
@@ -98,7 +144,9 @@ export default function ConfirmBookingPage({
       <div className="w-full max-w-md">
         <Card>
           <CardHeader>
-            <CardTitle>予約の確認</CardTitle>
+            <CardTitle>
+              {rescheduleId ? "予約の日時変更" : "予約の確認"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="mb-6 p-4 bg-muted rounded-lg">
@@ -106,6 +154,11 @@ export default function ConfirmBookingPage({
               <p className="text-sm text-muted-foreground mt-1">
                 タイムゾーン: {timezone}
               </p>
+              {rescheduleId && (
+                <p className="text-xs text-amber-600 mt-1">
+                  ※ 元の予約はキャンセルされ、新しい日時で再予約されます
+                </p>
+              )}
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -140,6 +193,29 @@ export default function ConfirmBookingPage({
                   required
                 />
               </div>
+
+              {customQuestions.map((q) => (
+                <div key={q.id}>
+                  <Label htmlFor={`q-${q.id}`}>
+                    {q.question}
+                    {q.required && (
+                      <span className="text-destructive ml-1">*</span>
+                    )}
+                  </Label>
+                  <Input
+                    id={`q-${q.id}`}
+                    value={answers[q.id] || ""}
+                    onChange={(e) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        [q.id]: e.target.value,
+                      }))
+                    }
+                    required={q.required}
+                  />
+                </div>
+              ))}
+
               <div>
                 <Label htmlFor="notes">メモ（任意）</Label>
                 <Textarea
@@ -160,7 +236,11 @@ export default function ConfirmBookingPage({
                 className="w-full"
                 disabled={submitting}
               >
-                {submitting ? "予約中..." : "予約を確定する"}
+                {submitting
+                  ? "予約中..."
+                  : rescheduleId
+                  ? "日時を変更して予約する"
+                  : "予約を確定する"}
               </Button>
             </form>
           </CardContent>

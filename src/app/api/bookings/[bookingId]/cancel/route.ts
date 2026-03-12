@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { bookings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { deleteCalendarEvent } from "@/lib/google-calendar";
+import { verifyGuestToken } from "@/lib/guest-token";
 
 export async function POST(
   req: NextRequest,
@@ -18,6 +20,18 @@ export async function POST(
 
   if (!booking) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+  }
+
+  // Auth: either logged-in owner or guest with valid token
+  const session = await auth();
+  const isOwner =
+    session?.user?.id && booking.assignedUserId === session.user.id;
+  const isGuest =
+    body.token &&
+    verifyGuestToken(bookingId, booking.guestEmail, body.token);
+
+  if (!isOwner && !isGuest) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (booking.status === "cancelled") {
