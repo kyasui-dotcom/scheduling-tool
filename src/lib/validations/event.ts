@@ -1,5 +1,29 @@
 import { z } from "zod";
 
+export const questionTypeEnum = z.enum([
+  "text",
+  "textarea",
+  "radio",
+  "checkbox",
+  "select",
+  "phone",
+  "number",
+]);
+
+export type QuestionType = z.infer<typeof questionTypeEnum>;
+
+export const customQuestionSchema = z.object({
+  id: z.string(),
+  question: z.string().min(1),
+  type: questionTypeEnum.default("text"),
+  required: z.boolean(),
+  description: z.string().optional(),
+  placeholder: z.string().optional(),
+  options: z.array(z.string()).optional(), // for radio, checkbox, select
+});
+
+export type CustomQuestion = z.infer<typeof customQuestionSchema>;
+
 export const createEventTypeSchema = z.object({
   title: z.string().min(1).max(255),
   slug: z
@@ -17,15 +41,7 @@ export const createEventTypeSchema = z.object({
   minNoticeMinutes: z.number().int().min(0).optional(),
   maxAdvanceDays: z.number().int().min(1).max(365).optional(),
   memberUserIds: z.array(z.string()).optional(),
-  customQuestions: z
-    .array(
-      z.object({
-        id: z.string(),
-        question: z.string().min(1),
-        required: z.boolean(),
-      })
-    )
-    .optional(),
+  customQuestions: z.array(customQuestionSchema).optional(),
 });
 
 export const updateEventTypeSchema = createEventTypeSchema.partial();

@@ -7,12 +7,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 
 interface CustomQuestion {
   id: string;
   question: string;
+  type: "text" | "textarea" | "radio" | "checkbox" | "select" | "phone" | "number";
   required: boolean;
+  description?: string;
+  placeholder?: string;
+  options?: string[];
 }
 
 export default function ConfirmBookingPage({
@@ -35,7 +46,7 @@ export default function ConfirmBookingPage({
     guestNotes: "",
   });
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -93,7 +104,11 @@ export default function ConfirmBookingPage({
       const eventData = await eventRes.json();
 
       const guestAnswers = customQuestions
-        .filter((q) => answers[q.id])
+        .filter((q) => {
+          const val = answers[q.id];
+          if (Array.isArray(val)) return val.length > 0;
+          return !!val;
+        })
         .map((q) => ({
           questionId: q.id,
           answer: answers[q.id],
@@ -195,24 +210,186 @@ export default function ConfirmBookingPage({
               </div>
 
               {customQuestions.map((q) => (
-                <div key={q.id}>
+                <div key={q.id} className="space-y-1.5">
                   <Label htmlFor={`q-${q.id}`}>
                     {q.question}
                     {q.required && (
                       <span className="text-destructive ml-1">*</span>
                     )}
                   </Label>
-                  <Input
-                    id={`q-${q.id}`}
-                    value={answers[q.id] || ""}
-                    onChange={(e) =>
-                      setAnswers((prev) => ({
-                        ...prev,
-                        [q.id]: e.target.value,
-                      }))
-                    }
-                    required={q.required}
-                  />
+                  {q.description && (
+                    <p className="text-xs text-muted-foreground">
+                      {q.description}
+                    </p>
+                  )}
+
+                  {/* Text input */}
+                  {(!q.type || q.type === "text") && (
+                    <Input
+                      id={`q-${q.id}`}
+                      value={(answers[q.id] as string) || ""}
+                      onChange={(e) =>
+                        setAnswers((prev) => ({
+                          ...prev,
+                          [q.id]: e.target.value,
+                        }))
+                      }
+                      placeholder={q.placeholder || ""}
+                      required={q.required}
+                    />
+                  )}
+
+                  {/* Textarea */}
+                  {q.type === "textarea" && (
+                    <Textarea
+                      id={`q-${q.id}`}
+                      value={(answers[q.id] as string) || ""}
+                      onChange={(e) =>
+                        setAnswers((prev) => ({
+                          ...prev,
+                          [q.id]: e.target.value,
+                        }))
+                      }
+                      placeholder={q.placeholder || ""}
+                      rows={3}
+                      required={q.required}
+                    />
+                  )}
+
+                  {/* Radio buttons */}
+                  {q.type === "radio" && (
+                    <div className="space-y-2 pt-1">
+                      {(q.options || []).map((opt, i) => (
+                        <label
+                          key={i}
+                          className="flex items-center gap-2.5 text-sm cursor-pointer hover:bg-muted/50 rounded px-2 py-1.5 -mx-2"
+                        >
+                          <input
+                            type="radio"
+                            name={`q-${q.id}`}
+                            value={opt}
+                            checked={(answers[q.id] as string) === opt}
+                            onChange={() =>
+                              setAnswers((prev) => ({
+                                ...prev,
+                                [q.id]: opt,
+                              }))
+                            }
+                            required={q.required}
+                            className="accent-primary"
+                          />
+                          {opt}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Checkboxes (multiple selection) */}
+                  {q.type === "checkbox" && (
+                    <div className="space-y-2 pt-1">
+                      {(q.options || []).map((opt, i) => {
+                        const selected = (answers[q.id] as string[]) || [];
+                        const isChecked = selected.includes(opt);
+                        return (
+                          <label
+                            key={i}
+                            className="flex items-center gap-2.5 text-sm cursor-pointer hover:bg-muted/50 rounded px-2 py-1.5 -mx-2"
+                          >
+                            <input
+                              type="checkbox"
+                              value={opt}
+                              checked={isChecked}
+                              onChange={() => {
+                                setAnswers((prev) => {
+                                  const current =
+                                    (prev[q.id] as string[]) || [];
+                                  const updated = isChecked
+                                    ? current.filter((v) => v !== opt)
+                                    : [...current, opt];
+                                  return { ...prev, [q.id]: updated };
+                                });
+                              }}
+                              className="accent-primary rounded"
+                            />
+                            {opt}
+                          </label>
+                        );
+                      })}
+                      {q.required && (
+                        <input
+                          type="text"
+                          className="sr-only"
+                          tabIndex={-1}
+                          required={
+                            q.required &&
+                            ((answers[q.id] as string[]) || []).length === 0
+                          }
+                          value={
+                            ((answers[q.id] as string[]) || []).length > 0
+                              ? "ok"
+                              : ""
+                          }
+                          onChange={() => {}}
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Dropdown select */}
+                  {q.type === "select" && (
+                    <Select
+                      value={(answers[q.id] as string) || ""}
+                      onValueChange={(v) =>
+                        setAnswers((prev) => ({ ...prev, [q.id]: v }))
+                      }
+                      required={q.required}
+                    >
+                      <SelectTrigger id={`q-${q.id}`}>
+                        <SelectValue placeholder="選択してください" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(q.options || []).map((opt, i) => (
+                          <SelectItem key={i} value={opt}>
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  {/* Phone */}
+                  {q.type === "phone" && (
+                    <Input
+                      id={`q-${q.id}`}
+                      type="tel"
+                      value={(answers[q.id] as string) || ""}
+                      onChange={(e) =>
+                        setAnswers((prev) => ({
+                          ...prev,
+                          [q.id]: e.target.value,
+                        }))
+                      }
+                      placeholder={q.placeholder || "090-1234-5678"}
+                      required={q.required}
+                    />
+                  )}
+
+                  {/* Number */}
+                  {q.type === "number" && (
+                    <Input
+                      id={`q-${q.id}`}
+                      type="number"
+                      value={(answers[q.id] as string) || ""}
+                      onChange={(e) =>
+                        setAnswers((prev) => ({
+                          ...prev,
+                          [q.id]: e.target.value,
+                        }))
+                      }
+                      placeholder={q.placeholder || ""}
+                      required={q.required}
+                    />
+                  )}
                 </div>
               ))}
 

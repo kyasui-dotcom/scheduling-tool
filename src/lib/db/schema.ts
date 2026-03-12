@@ -131,7 +131,15 @@ export const eventTypes = pgTable(
     minNoticeMinutes: integer("min_notice_minutes").default(60),
     maxAdvanceDays: integer("max_advance_days").default(60),
     customQuestions: jsonb("custom_questions").$type<
-      Array<{ id: string; question: string; required: boolean }>
+      Array<{
+        id: string;
+        question: string;
+        type: "text" | "textarea" | "radio" | "checkbox" | "select" | "phone" | "number";
+        required: boolean;
+        description?: string;
+        placeholder?: string;
+        options?: string[];
+      }>
     >(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -207,7 +215,7 @@ export const bookings = pgTable("booking", {
   guestNotes: text("guest_notes"),
   guestTimezone: varchar("guest_timezone", { length: 64 }).notNull(),
   guestAnswers: jsonb("guest_answers").$type<
-    Array<{ questionId: string; answer: string }>
+    Array<{ questionId: string; answer: string | string[] }>
   >(),
   startTime: timestamp("start_time", { withTimezone: true }).notNull(),
   endTime: timestamp("end_time", { withTimezone: true }).notNull(),

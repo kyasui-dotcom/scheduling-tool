@@ -16,6 +16,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { MemberPicker } from "@/components/member-picker";
+import { CustomQuestionEditor } from "@/components/custom-question-editor";
+import type { CustomQuestion } from "@/lib/validations/event";
 import { toast } from "sonner";
 
 interface Member {
@@ -38,9 +40,7 @@ export default function EditEventPage({
   const [loading, setLoading] = useState(true);
   const [selectedMembers, setSelectedMembers] = useState<Member[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
-  const [customQuestions, setCustomQuestions] = useState<
-    Array<{ id: string; question: string; required: boolean }>
-  >([]);
+  const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
   const [form, setForm] = useState({
     title: "",
     slug: "",
@@ -344,60 +344,11 @@ export default function EditEventPage({
           <CardHeader>
             <CardTitle className="text-base">カスタム質問</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              予約時にゲストに回答してもらう質問を追加できます
-            </p>
-            {customQuestions.map((q, index) => (
-              <div key={q.id} className="flex items-start gap-2 bg-muted p-3 rounded-lg">
-                <div className="flex-1 space-y-2">
-                  <Input
-                    value={q.question}
-                    onChange={(e) => {
-                      const updated = [...customQuestions];
-                      updated[index].question = e.target.value;
-                      setCustomQuestions(updated);
-                    }}
-                    placeholder="質問を入力..."
-                  />
-                  <label className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={q.required}
-                      onChange={(e) => {
-                        const updated = [...customQuestions];
-                        updated[index].required = e.target.checked;
-                        setCustomQuestions(updated);
-                      }}
-                    />
-                    必須
-                  </label>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setCustomQuestions(customQuestions.filter((_, i) => i !== index));
-                  }}
-                >
-                  ✕
-                </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setCustomQuestions([
-                  ...customQuestions,
-                  { id: crypto.randomUUID(), question: "", required: false },
-                ]);
-              }}
-            >
-              + 質問を追加
-            </Button>
+          <CardContent>
+            <CustomQuestionEditor
+              questions={customQuestions}
+              onChange={setCustomQuestions}
+            />
           </CardContent>
         </Card>
 
