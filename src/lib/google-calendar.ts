@@ -127,6 +127,10 @@ export async function createCalendarEvent(params: {
     start: { dateTime: string };
     end: { dateTime: string };
     attendees: Array<{ email: string }>;
+    reminders: {
+      useDefault: boolean;
+      overrides: Array<{ method: string; minutes: number }>;
+    };
     location?: string;
     conferenceData?: {
       createRequest: {
@@ -140,6 +144,13 @@ export async function createCalendarEvent(params: {
     start: { dateTime: params.startTime },
     end: { dateTime: params.endTime },
     attendees: params.attendeeEmails.map((email) => ({ email })),
+    reminders: {
+      useDefault: false,
+      overrides: [
+        { method: "email", minutes: 24 * 60 },
+        { method: "popup", minutes: 30 },
+      ],
+    },
   };
 
   if (params.location) {
