@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" fill="none">
+  <!-- Background -->
+  <rect width="180" height="180" rx="40" fill="#6366f1"/>
+  <!-- Calendar body -->
+  <rect x="25" y="45" width="130" height="110" rx="16" fill="white" fill-opacity="0.15"/>
+  <!-- Top bar -->
+  <rect x="25" y="45" width="130" height="35" rx="16" fill="white" fill-opacity="0.25"/>
+  <rect x="25" y="64" width="130" height="16" fill="white" fill-opacity="0.25"/>
+  <!-- Hooks -->
+  <rect x="55" y="30" width="12" height="30" rx="6" fill="white" fill-opacity="0.6"/>
+  <rect x="113" y="30" width="12" height="30" rx="6" fill="white" fill-opacity="0.6"/>
+  <!-- Grid (dates) -->
+  <rect x="40" y="90" width="22" height="14" rx="4" fill="white" fill-opacity="0.3"/>
+  <rect x="79" y="90" width="22" height="14" rx="4" fill="white" fill-opacity="0.3"/>
+  <rect x="118" y="90" width="22" height="14" rx="4" fill="white" fill-opacity="0.3"/>
+  <rect x="40" y="118" width="22" height="14" rx="4" fill="white" fill-opacity="0.3"/>
+  <rect x="79" y="118" width="22" height="14" rx="4" fill="white"/>
+  <rect x="118" y="118" width="22" height="14" rx="4" fill="white" fill-opacity="0.3"/>
+</svg>
