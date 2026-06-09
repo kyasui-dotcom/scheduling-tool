@@ -126,7 +126,7 @@ export async function createCalendarEvent(params: {
     description: string;
     start: { dateTime: string };
     end: { dateTime: string };
-    attendees: Array<{ email: string }>;
+    attendees: Array<{ email: string; responseStatus: string }>;
     reminders: {
       useDefault: boolean;
       overrides: Array<{ method: string; minutes: number }>;
@@ -143,7 +143,10 @@ export async function createCalendarEvent(params: {
     description: params.description,
     start: { dateTime: params.startTime },
     end: { dateTime: params.endTime },
-    attendees: params.attendeeEmails.map((email) => ({ email })),
+    attendees: params.attendeeEmails.map((email) => ({
+      email,
+      responseStatus: "accepted",
+    })),
     reminders: {
       useDefault: false,
       overrides: [
