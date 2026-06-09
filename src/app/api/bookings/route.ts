@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
   try {
     if (eventType.meetingPlatform === "zoom") {
       const zoom = await createZoomMeeting({
-        topic: `${data.guestCompanyName}/${data.guestName} ${eventType.title}`,
+        topic: `${eventType.title}${data.guestCompanyName}/${data.guestName}様`,
         startTime: startTime.toISOString(),
         durationMinutes: eventType.durationMinutes,
       });
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join("\n");
 
-    const calendarTitle = `${data.guestCompanyName}/${data.guestName} ${eventType.title}`;
+    const calendarTitle = `${eventType.title}${data.guestCompanyName}/${data.guestName}様`;
 
     // Only the assigned user gets the calendar event.
     // For any_available, other members are NOT invited as attendees so their
