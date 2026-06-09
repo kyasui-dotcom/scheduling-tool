@@ -41,6 +41,7 @@ export default function ConfirmBookingPage({
   const rescheduleToken = searchParams.get("token");
 
   const [form, setForm] = useState({
+    guestCompanyName: "",
     guestName: "",
     guestEmail: "",
     guestNotes: "",
@@ -132,6 +133,7 @@ export default function ConfirmBookingPage({
         body: JSON.stringify({
           eventTypeId: eventData.eventTypeId,
           startTime: slotStart,
+          guestCompanyName: form.guestCompanyName,
           guestName: form.guestName,
           guestEmail: form.guestEmail,
           guestTimezone: timezone,
@@ -178,7 +180,28 @@ export default function ConfirmBookingPage({
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="name">お名前</Label>
+                <Label htmlFor="company">
+                  社名
+                  <span className="text-destructive ml-1">*</span>
+                </Label>
+                <Input
+                  id="company"
+                  value={form.guestCompanyName}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      guestCompanyName: e.target.value,
+                    }))
+                  }
+                  placeholder="株式会社〇〇"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="name">
+                  担当者名
+                  <span className="text-destructive ml-1">*</span>
+                </Label>
                 <Input
                   id="name"
                   value={form.guestName}
@@ -193,7 +216,10 @@ export default function ConfirmBookingPage({
                 />
               </div>
               <div>
-                <Label htmlFor="email">メールアドレス</Label>
+                <Label htmlFor="email">
+                  メールアドレス
+                  <span className="text-destructive ml-1">*</span>
+                </Label>
                 <Input
                   id="email"
                   type="email"

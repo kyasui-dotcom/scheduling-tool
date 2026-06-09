@@ -216,6 +216,9 @@ export const bookings = pgTable("booking", {
     .notNull()
     .references(() => eventTypes.id, { onDelete: "cascade" }),
   assignedUserId: text("assigned_user_id").references(() => users.id),
+  guestCompanyName: varchar("guest_company_name", { length: 255 })
+    .notNull()
+    .default(""),
   guestName: varchar("guest_name", { length: 255 }).notNull(),
   guestEmail: varchar("guest_email", { length: 320 }).notNull(),
   guestNotes: text("guest_notes"),

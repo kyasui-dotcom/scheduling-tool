@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { bookings, eventTypes, users, eventTypeMembers } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { bookings, eventTypes } from "@/lib/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { createBookingSchema } from "@/lib/validations/booking";
 import {
   getAvailability,
   isFlexibleStartAvailable,
   selectAssignee,
 } from "@/lib/availability-engine";
-import { createCalendarEvent } from "@/lib/google-calendar";
+import {
+  createCalendarEvent,
+  getMultiUserFreeBusy,
+} from "@/lib/google-calendar";
 import { createZoomMeeting } from "@/lib/zoom";
 import { addMinutes } from "date-fns";
 import { getDateStringInTimezone } from "@/lib/timezone";
@@ -105,19 +108,34 @@ export async function POST(req: NextRequest) {
     availableUserIds &&
     availableUserIds.length > 1
   ) {
-    assignedUserId = await selectAssignee(
+    // Defensive re-check: filter to users actually free at the requested time
+    // (window aggregation can over-report when users' free windows overlap but
+    //  the chosen instant is only free for a subset)
+    const reqStart = new Date(data.startTime);
+    const reqEnd = addMinutes(reqStart, eventType.durationMinutes);
+    const busyMap = await getMultiUserFreeBusy(
       availableUserIds,
-      data.eventTypeId
+      reqStart.toISOString(),
+      reqEnd.toISOString()
     );
+    const reqStartMs = reqStart.getTime();
+    const reqEndMs = reqEnd.getTime();
+    const trulyFree = availableUserIds.filter((uid) => {
+      const busy = busyMap.get(uid) || [];
+      return !busy.some((b) => {
+        const bs = new Date(b.start).getTime();
+        const be = new Date(b.end).getTime();
+        return bs < reqEndMs && be > reqStartMs;
+      });
+    });
+    const finalCandidates = trulyFree.length > 0 ? trulyFree : availableUserIds;
+    assignedUserId =
+      finalCandidates.length > 1
+        ? await selectAssignee(finalCandidates, data.eventTypeId)
+        : finalCandidates[0];
   } else {
     assignedUserId = availableUserIds?.[0] || eventType.userId;
   }
-
-  // Load assigned user info
-  const [assignedUser] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, assignedUserId));
 
   const startTime = new Date(data.startTime);
   const endTime = addMinutes(startTime, eventType.durationMinutes);
@@ -130,7 +148,7 @@ export async function POST(req: NextRequest) {
   try {
     if (eventType.meetingPlatform === "zoom") {
       const zoom = await createZoomMeeting({
-        topic: `${eventType.title} with ${data.guestName}`,
+        topic: `${data.guestCompanyName}/${data.guestName} ${eventType.title}`,
         startTime: startTime.toISOString(),
         durationMinutes: eventType.durationMinutes,
       });
@@ -141,6 +159,7 @@ export async function POST(req: NextRequest) {
     // Create Google Calendar event
     const description = [
       `Meeting: ${eventType.title}`,
+      `Company: ${data.guestCompanyName}`,
       `Guest: ${data.guestName} (${data.guestEmail})`,
       data.guestNotes ? `Notes: ${data.guestNotes}` : "",
       meetingUrl ? `Meeting Link: ${meetingUrl}` : "",
@@ -148,29 +167,14 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join("\n");
 
-    // Get all attendee emails for all_available mode
-    let attendeeEmails = [data.guestEmail];
-    if (eventType.schedulingMode === "all_available") {
-      const members = await db
-        .select({ userId: eventTypeMembers.userId })
-        .from(eventTypeMembers)
-        .where(eq(eventTypeMembers.eventTypeId, data.eventTypeId));
+    const calendarTitle = `${data.guestCompanyName}/${data.guestName} ${eventType.title}`;
 
-      const memberUsers = await db
-        .select({ email: users.email })
-        .from(users)
-        .where(
-          eq(
-            users.id,
-            members.map((m) => m.userId)[0] // This is simplified - in production use inArray
-          )
-        );
-      // For simplicity, just add assigned user's email
-    }
-
+    // Only the assigned user gets the calendar event.
+    // For any_available, other members are NOT invited as attendees so their
+    // calendars are not touched.
     const calendarResult = await createCalendarEvent({
       userId: assignedUserId,
-      summary: `${eventType.title} - ${data.guestName}`,
+      summary: calendarTitle,
       description,
       startTime: startTime.toISOString(),
       endTime: endTime.toISOString(),
@@ -194,6 +198,7 @@ export async function POST(req: NextRequest) {
     .values({
       eventTypeId: data.eventTypeId,
       assignedUserId,
+      guestCompanyName: data.guestCompanyName,
       guestName: data.guestName,
       guestEmail: data.guestEmail,
       guestNotes: data.guestNotes,
