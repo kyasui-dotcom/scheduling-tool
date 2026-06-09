@@ -58,41 +58,51 @@ export async function PATCH(
 
   const { memberUserIds, ...updateData } = parsed.data;
 
-  const [updated] = await db
-    .update(eventTypes)
-    .set({ ...updateData, updatedAt: new Date() })
-    .where(
-      and(
-        eq(eventTypes.id, eventId),
-        eq(eventTypes.userId, session.user.id)
+  try {
+    const [updated] = await db
+      .update(eventTypes)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(
+        and(
+          eq(eventTypes.id, eventId),
+          eq(eventTypes.userId, session.user.id)
+        )
       )
-    )
-    .returning();
+      .returning();
 
-  if (!updated) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+    if (!updated) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
-  // Update members if provided
-  if (memberUserIds) {
-    await db
-      .delete(eventTypeMembers)
-      .where(eq(eventTypeMembers.eventTypeId, eventId));
+    // Update members if provided
+    if (memberUserIds) {
+      await db
+        .delete(eventTypeMembers)
+        .where(eq(eventTypeMembers.eventTypeId, eventId));
 
-    const allMemberIds = [
-      session.user!.id,
-      ...memberUserIds.filter((id) => id !== session.user!.id),
-    ];
-    await db.insert(eventTypeMembers).values(
-      allMemberIds.map((userId) => ({
-        eventTypeId: eventId,
-        userId,
-        isRequired: true,
-      }))
+      const allMemberIds = Array.from(
+        new Set([
+          session.user!.id,
+          ...memberUserIds.filter((id) => id !== session.user!.id),
+        ])
+      );
+      await db.insert(eventTypeMembers).values(
+        allMemberIds.map((userId) => ({
+          eventTypeId: eventId,
+          userId,
+          isRequired: true,
+        }))
+      );
+    }
+
+    return NextResponse.json(updated);
+  } catch (err) {
+    console.error("[PATCH /api/events/:id] DB error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Database error" },
+      { status: 500 }
     );
   }
-
-  return NextResponse.json(updated);
 }
 
 export async function DELETE(

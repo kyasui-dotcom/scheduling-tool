@@ -29,6 +29,11 @@ export const meetingPlatformEnum = pgEnum("meeting_platform", [
   "none",
 ]);
 
+export const slotModeEnum = pgEnum("slot_mode", [
+  "fixed_slots",
+  "flexible_start",
+]);
+
 export const bookingStatusEnum = pgEnum("booking_status", [
   "confirmed",
   "cancelled",
@@ -124,6 +129,7 @@ export const eventTypes = pgTable(
     schedulingMode: schedulingModeEnum("scheduling_mode")
       .notNull()
       .default("specific_person"),
+    slotMode: slotModeEnum("slot_mode").notNull().default("fixed_slots"),
     color: varchar("color", { length: 7 }).default("#6366f1"),
     isActive: boolean("is_active").notNull().default(true),
     bufferBeforeMinutes: integer("buffer_before_minutes").default(0),

@@ -4,7 +4,11 @@ import { db } from "@/lib/db";
 import { bookings, eventTypes, users, eventTypeMembers } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { createBookingSchema } from "@/lib/validations/booking";
-import { getAvailableSlots, selectAssignee } from "@/lib/availability-engine";
+import {
+  getAvailability,
+  isFlexibleStartAvailable,
+  selectAssignee,
+} from "@/lib/availability-engine";
 import { createCalendarEvent } from "@/lib/google-calendar";
 import { createZoomMeeting } from "@/lib/zoom";
 import { addMinutes } from "date-fns";
@@ -61,37 +65,52 @@ export async function POST(req: NextRequest) {
     new Date(data.startTime),
     data.guestTimezone
   );
-  const availableSlots = await getAvailableSlots({
-    eventTypeId: data.eventTypeId,
-    date: dateStr,
-    guestTimezone: data.guestTimezone,
-  });
+  let availableUserIds: string[] | undefined;
 
-  const requestedSlot = availableSlots.find(
-    (s) => s.startTime === new Date(data.startTime).toISOString()
-  );
-
-  if (!requestedSlot) {
-    return NextResponse.json(
-      { error: "This time slot is no longer available" },
-      { status: 409 }
+  if (eventType.slotMode === "flexible_start") {
+    const flex = await isFlexibleStartAvailable({
+      eventTypeId: data.eventTypeId,
+      startTimeIso: new Date(data.startTime).toISOString(),
+      guestTimezone: data.guestTimezone,
+    });
+    if (!flex) {
+      return NextResponse.json(
+        { error: "This start time is no longer available" },
+        { status: 409 }
+      );
+    }
+    availableUserIds = flex.availableUserIds;
+  } else {
+    const result = await getAvailability({
+      eventTypeId: data.eventTypeId,
+      date: dateStr,
+      guestTimezone: data.guestTimezone,
+    });
+    const requestedSlot = result.slots.find(
+      (s) => s.startTime === new Date(data.startTime).toISOString()
     );
+    if (!requestedSlot) {
+      return NextResponse.json(
+        { error: "This time slot is no longer available" },
+        { status: 409 }
+      );
+    }
+    availableUserIds = requestedSlot.availableUserIds;
   }
 
   // Determine assigned user
   let assignedUserId: string;
   if (
     eventType.schedulingMode === "any_available" &&
-    requestedSlot.availableUserIds &&
-    requestedSlot.availableUserIds.length > 1
+    availableUserIds &&
+    availableUserIds.length > 1
   ) {
     assignedUserId = await selectAssignee(
-      requestedSlot.availableUserIds,
+      availableUserIds,
       data.eventTypeId
     );
   } else {
-    assignedUserId =
-      requestedSlot.availableUserIds?.[0] || eventType.userId;
+    assignedUserId = availableUserIds?.[0] || eventType.userId;
   }
 
   // Load assigned user info

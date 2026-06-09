@@ -42,6 +42,7 @@ export default function NewEventPage() {
       | "any_available"
       | "all_available"
       | "specific_person",
+    slotMode: "fixed_slots" as "fixed_slots" | "flexible_start",
     color: "#6366f1",
     bufferBeforeMinutes: 0,
     bufferAfterMinutes: 0,
@@ -218,6 +219,31 @@ export default function NewEventPage() {
                   <SelectItem value="none">なし（対面・電話等）</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>時間選択方式</Label>
+              <Select
+                value={form.slotMode}
+                onValueChange={(v) => updateField("slotMode", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed_slots">
+                    固定スロットから選ぶ
+                  </SelectItem>
+                  <SelectItem value="flexible_start">
+                    開始時刻を自由に選ぶ
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {form.slotMode === "fixed_slots" &&
+                  `${form.durationMinutes}分刻みの固定スロットから先方が選択します`}
+                {form.slotMode === "flexible_start" &&
+                  "空き時間帯の中から先方が15分刻みで開始時刻を選択します（所要時間ぶん予約）"}
+              </p>
             </div>
             <div>
               <Label>スケジューリングモード</Label>

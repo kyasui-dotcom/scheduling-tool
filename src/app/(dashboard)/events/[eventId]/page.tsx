@@ -48,6 +48,7 @@ export default function EditEventPage({
     durationMinutes: 30,
     meetingPlatform: "google_meet" as string,
     schedulingMode: "specific_person" as string,
+    slotMode: "fixed_slots" as string,
     color: "#6366f1",
     isActive: true,
     bufferBeforeMinutes: 0,
@@ -69,6 +70,7 @@ export default function EditEventPage({
             durationMinutes: data.durationMinutes || 30,
             meetingPlatform: data.meetingPlatform || "google_meet",
             schedulingMode: data.schedulingMode || "specific_person",
+            slotMode: data.slotMode || "fixed_slots",
             color: data.color || "#6366f1",
             isActive: data.isActive ?? true,
             bufferBeforeMinutes: data.bufferBeforeMinutes || 0,
@@ -133,9 +135,15 @@ export default function EditEventPage({
         toast.success("更新しました");
         router.push("/events");
       } else {
-        toast.error("更新に失敗しました");
+        const data = await res.json().catch(() => ({}));
+        const detail = data.details
+          ? JSON.stringify(data.details)
+          : data.error || `HTTP ${res.status}`;
+        console.error("[event PATCH failed]", data);
+        toast.error(`更新に失敗しました: ${detail}`);
       }
-    } catch {
+    } catch (err) {
+      console.error("[event PATCH error]", err);
       toast.error("更新に失敗しました");
     } finally {
       setSaving(false);
@@ -290,6 +298,31 @@ export default function EditEventPage({
                   <SelectItem value="none">なし</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>時間選択方式</Label>
+              <Select
+                value={form.slotMode}
+                onValueChange={(v) => updateField("slotMode", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed_slots">
+                    固定スロットから選ぶ
+                  </SelectItem>
+                  <SelectItem value="flexible_start">
+                    開始時刻を自由に選ぶ
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {form.slotMode === "fixed_slots" &&
+                  `${form.durationMinutes}分刻みの固定スロットから先方が選択します`}
+                {form.slotMode === "flexible_start" &&
+                  "空き時間帯の中から先方が15分刻みで開始時刻を選択します（所要時間ぶん予約）"}
+              </p>
             </div>
             <div>
               <Label>スケジューリングモード</Label>

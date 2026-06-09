@@ -6,7 +6,7 @@ import {
   availabilityRules,
 } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getAvailableSlots } from "@/lib/availability-engine";
+import { getAvailability } from "@/lib/availability-engine";
 import { updateAvailabilitySchema } from "@/lib/validations/availability";
 
 // Public: Get available slots for a specific event type and date
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const slots = await getAvailableSlots({
+    const result = await getAvailability({
       eventTypeId,
       date,
       guestTimezone: timezone,
@@ -41,7 +41,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       date,
       timezone,
-      slots,
+      mode: result.mode,
+      slots: result.slots,
+      windows: result.windows,
     });
   } catch (error) {
     console.error("Error computing availability:", error);

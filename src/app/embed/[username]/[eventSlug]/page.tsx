@@ -39,6 +39,7 @@ export default async function EmbedPage({
         description: eventType.description,
         durationMinutes: eventType.durationMinutes,
         color: eventType.color,
+        slotMode: eventType.slotMode ?? "fixed_slots",
       }}
       organizer={{
         name: user.name || username,
