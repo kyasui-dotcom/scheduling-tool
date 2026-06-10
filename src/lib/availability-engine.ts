@@ -295,6 +295,46 @@ export async function selectAssignee(
 }
 
 /**
+ * Multi-day variant for a saved event type.
+ * Loads event_type + members once, then delegates to the batched range computation.
+ */
+export async function getAvailabilityRange(params: {
+  eventTypeId: string;
+  startDate: string;
+  days: number;
+  guestTimezone: string;
+}): Promise<Array<AvailabilityResult & { date: string }>> {
+  const [eventType] = await db
+    .select()
+    .from(eventTypes)
+    .where(eq(eventTypes.id, params.eventTypeId));
+  if (!eventType || !eventType.isActive) return [];
+
+  const members = await db
+    .select({ userId: eventTypeMembers.userId })
+    .from(eventTypeMembers)
+    .where(eq(eventTypeMembers.eventTypeId, params.eventTypeId));
+
+  const memberUserIds =
+    members.length > 0 ? members.map((m) => m.userId) : [eventType.userId];
+
+  return getAvailabilityRangeFromConfig({
+    memberUserIds,
+    startDate: params.startDate,
+    days: params.days,
+    guestTimezone: params.guestTimezone,
+    slotMode: eventType.slotMode ?? "fixed_slots",
+    durationMinutes: eventType.durationMinutes,
+    bufferBeforeMinutes: eventType.bufferBeforeMinutes || 0,
+    bufferAfterMinutes: eventType.bufferAfterMinutes || 0,
+    minNoticeMinutes: eventType.minNoticeMinutes || 0,
+    maxAdvanceDays: eventType.maxAdvanceDays || 60,
+    schedulingMode: eventType.schedulingMode,
+    excludeEventTypeId: params.eventTypeId,
+  });
+}
+
+/**
  * Multi-day variant of getAvailabilityFromConfig.
  * Fetches FreeBusy / schedules / rules / overrides / bookings ONCE for the
  * whole range and computes each day in memory.

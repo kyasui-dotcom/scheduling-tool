@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { format, addMonths, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isBefore, startOfDay } from "date-fns";
+import { format, addMonths, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isBefore, startOfDay } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,45 +36,109 @@ interface FlexibleWindow {
 
 const FLEX_STEP_MINUTES = 15;
 
+interface DayData {
+  slots: TimeSlot[];
+  windows: FlexibleWindow[];
+}
+
+const PHASE1_DAYS = 2;   // today + tomorrow on first paint
+const PHASE2_DAYS = 12;  // background prefetch of the rest
+
 export function BookingClient({ eventType, organizer }: Props) {
   const router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [slots, setSlots] = useState<TimeSlot[]>([]);
-  const [windows, setWindows] = useState<FlexibleWindow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [cache, setCache] = useState<Map<string, DayData>>(new Map());
+  const [loadingDates, setLoadingDates] = useState<Set<string>>(new Set());
   const [timezone, setTimezone] = useState("Asia/Tokyo");
+  const inFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
   }, []);
 
-  const fetchAvailability = useCallback(
-    async (date: Date) => {
-      setLoading(true);
+  const fetchDays = useCallback(
+    async (startDateStr: string, days: number) => {
+      const dateKeys: string[] = [];
+      const baseDate = new Date(`${startDateStr}T00:00:00`);
+      for (let i = 0; i < days; i++) {
+        dateKeys.push(format(addDays(baseDate, i), "yyyy-MM-dd"));
+      }
+      // Skip dates already cached or in-flight
+      const toFetch = dateKeys.filter(
+        (d) => !cache.has(d) && !inFlightRef.current.has(d)
+      );
+      if (toFetch.length === 0) return;
+
+      toFetch.forEach((d) => inFlightRef.current.add(d));
+      setLoadingDates((prev) => {
+        const next = new Set(prev);
+        toFetch.forEach((d) => next.add(d));
+        return next;
+      });
+
       try {
-        const dateStr = format(date, "yyyy-MM-dd");
         const res = await fetch(
-          `/api/availability?eventTypeId=${eventType.id}&date=${dateStr}&timezone=${timezone}`
+          `/api/availability?eventTypeId=${eventType.id}&date=${startDateStr}&days=${days}&timezone=${timezone}`
         );
         if (res.ok) {
           const data = await res.json();
-          setSlots(data.slots || []);
-          setWindows(data.windows || []);
+          const arr: Array<{ date: string; slots?: TimeSlot[]; windows?: FlexibleWindow[] }> =
+            data.days || [];
+          setCache((prev) => {
+            const next = new Map(prev);
+            for (const d of arr) {
+              next.set(d.date, {
+                slots: d.slots || [],
+                windows: d.windows || [],
+              });
+            }
+            return next;
+          });
         }
       } catch {
-        setSlots([]);
-        setWindows([]);
+        // network error: leave dates uncached so a retry can happen
       } finally {
-        setLoading(false);
+        toFetch.forEach((d) => inFlightRef.current.delete(d));
+        setLoadingDates((prev) => {
+          const next = new Set(prev);
+          toFetch.forEach((d) => next.delete(d));
+          return next;
+        });
       }
     },
-    [eventType.id, timezone]
+    [eventType.id, timezone, cache]
   );
 
+  // Phase 1: immediate prefetch today + tomorrow
+  // Phase 2: background prefetch the next 12 days
   useEffect(() => {
-    if (selectedDate) fetchAvailability(selectedDate);
-  }, [selectedDate, fetchAvailability]);
+    if (!timezone) return;
+    const today = format(new Date(), "yyyy-MM-dd");
+    fetchDays(today, PHASE1_DAYS);
+    const t = setTimeout(() => {
+      const start = format(addDays(new Date(), PHASE1_DAYS), "yyyy-MM-dd");
+      fetchDays(start, PHASE2_DAYS);
+    }, 80);
+    return () => clearTimeout(t);
+    // intentionally only on mount + timezone resolution
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timezone, eventType.id]);
+
+  // When user selects a date: fetch immediately if not cached (jumps the queue)
+  useEffect(() => {
+    if (!selectedDate) return;
+    const key = format(selectedDate, "yyyy-MM-dd");
+    if (!cache.has(key) && !inFlightRef.current.has(key)) {
+      fetchDays(key, 1);
+    }
+  }, [selectedDate, cache, fetchDays]);
+
+  const selectedKey = selectedDate ? format(selectedDate, "yyyy-MM-dd") : null;
+  const dayData = selectedKey ? cache.get(selectedKey) : null;
+  const loading = selectedKey ? loadingDates.has(selectedKey) && !dayData : false;
+  const slots = dayData?.slots || [];
+  const windows = dayData?.windows || [];
 
   function navigateToConfirm(startIso: string) {
     const pathParts = window.location.pathname.split("/");
@@ -182,17 +246,40 @@ export function BookingClient({ eventType, organizer }: Props) {
                     selectedDate &&
                     format(day, "yyyy-MM-dd") ===
                       format(selectedDate, "yyyy-MM-dd");
+                  const dayKey = format(day, "yyyy-MM-dd");
+                  const cached = cache.get(dayKey);
+                  const isPrefetching = loadingDates.has(dayKey);
+                  const cachedCount = cached
+                    ? eventType.slotMode === "fixed_slots"
+                      ? cached.slots.length
+                      : cached.windows.length
+                    : null;
+                  const isCachedEmpty = cached !== undefined && cachedCount === 0;
                   return (
                     <button
                       key={day.toISOString()}
                       className={`
-                        aspect-square flex items-center justify-center rounded-md text-sm
+                        relative aspect-square flex items-center justify-center rounded-md text-sm
                         transition-colors
                         ${isPast ? "text-muted-foreground/50 cursor-not-allowed" : "hover:bg-primary/10 cursor-pointer"}
+                        ${isCachedEmpty && !isPast ? "text-muted-foreground/40" : ""}
                         ${isSelected ? "bg-primary text-primary-foreground hover:bg-primary" : ""}
                         ${isToday(day) && !isSelected ? "border border-primary" : ""}
                       `}
                       disabled={isPast}
+                      title={
+                        cached
+                          ? `空き ${cachedCount} ${eventType.slotMode === "fixed_slots" ? "スロット" : "時間帯"}`
+                          : isPrefetching
+                          ? "読み込み中..."
+                          : undefined
+                      }
+                      onMouseEnter={() => {
+                        // Prefetch on hover if not cached
+                        if (!isPast && !cache.has(dayKey) && !inFlightRef.current.has(dayKey)) {
+                          fetchDays(dayKey, 1);
+                        }
+                      }}
                       onClick={() => setSelectedDate(day)}
                     >
                       {format(day, "d")}

@@ -6,15 +6,20 @@ import {
   availabilityRules,
 } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getAvailability } from "@/lib/availability-engine";
+import {
+  getAvailability,
+  getAvailabilityRange,
+} from "@/lib/availability-engine";
 import { updateAvailabilitySchema } from "@/lib/validations/availability";
 
-// Public: Get available slots for a specific event type and date
+// Public: Get available slots for an event type, single day or multi-day range
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const eventTypeId = searchParams.get("eventTypeId");
   const date = searchParams.get("date");
   const timezone = searchParams.get("timezone") || "Asia/Tokyo";
+  const daysParam = searchParams.get("days");
+  const days = daysParam ? Math.max(1, Math.min(31, parseInt(daysParam, 10) || 1)) : 1;
 
   if (!eventTypeId || !date) {
     return NextResponse.json(
@@ -23,7 +28,6 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Validate date format
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json(
       { error: "Date must be in YYYY-MM-DD format" },
@@ -32,6 +36,25 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    if (days > 1) {
+      const range = await getAvailabilityRange({
+        eventTypeId,
+        startDate: date,
+        days,
+        guestTimezone: timezone,
+      });
+      return NextResponse.json({
+        timezone,
+        startDate: date,
+        days: range.map((r) => ({
+          date: r.date,
+          mode: r.mode,
+          slots: r.slots,
+          windows: r.windows,
+        })),
+      });
+    }
+
     const result = await getAvailability({
       eventTypeId,
       date,
@@ -39,8 +62,18 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({
-      date,
       timezone,
+      startDate: date,
+      days: [
+        {
+          date,
+          mode: result.mode,
+          slots: result.slots,
+          windows: result.windows,
+        },
+      ],
+      // Legacy single-day fields (kept for backward compat)
+      date,
       mode: result.mode,
       slots: result.slots,
       windows: result.windows,
