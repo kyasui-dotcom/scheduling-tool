@@ -294,6 +294,336 @@ export async function selectAssignee(
   return assignee;
 }
 
+/**
+ * Multi-day variant of getAvailabilityFromConfig.
+ * Fetches FreeBusy / schedules / rules / overrides / bookings ONCE for the
+ * whole range and computes each day in memory.
+ * 7-day preview: ~7x fewer Google API calls per user.
+ */
+export async function getAvailabilityRangeFromConfig(params: {
+  memberUserIds: string[];
+  startDate: string;
+  days: number;
+  guestTimezone: string;
+  slotMode: SlotMode;
+  durationMinutes: number;
+  bufferBeforeMinutes?: number;
+  bufferAfterMinutes?: number;
+  minNoticeMinutes?: number;
+  maxAdvanceDays?: number;
+  schedulingMode: "any_available" | "all_available" | "specific_person";
+  excludeEventTypeId?: string;
+}): Promise<Array<AvailabilityResult & { date: string }>> {
+  const memberUserIds = params.memberUserIds;
+  const startDate = new Date(`${params.startDate}T00:00:00Z`);
+  const queryStart = addDays(startDate, -1);
+  const queryEnd = addDays(startDate, params.days + 1);
+  const eventTypeId = params.excludeEventTypeId ?? null;
+
+  // Fetch all data ONCE for the full range
+  const [busyData, perUserStatic, allOverrides, allBookings] = await Promise.all([
+    getMultiUserFreeBusy(memberUserIds, queryStart.toISOString(), queryEnd.toISOString()),
+    fetchPerUserStatic(memberUserIds),
+    fetchAllOverrides(memberUserIds, queryStart, queryEnd),
+    eventTypeId
+      ? db
+          .select({
+            startTime: bookings.startTime,
+            endTime: bookings.endTime,
+            assignedUserId: bookings.assignedUserId,
+          })
+          .from(bookings)
+          .where(
+            and(
+              eq(bookings.eventTypeId, eventTypeId),
+              eq(bookings.status, "confirmed"),
+              gte(bookings.startTime, queryStart),
+              lte(bookings.endTime, queryEnd)
+            )
+          )
+      : Promise.resolve(
+          [] as Array<{ startTime: Date; endTime: Date; assignedUserId: string | null }>
+        ),
+  ]);
+
+  const results: Array<AvailabilityResult & { date: string }> = [];
+  for (let i = 0; i < params.days; i++) {
+    const date = formatDateInTz(addDays(startDate, i), "UTC");
+    const perUserWindows = computePerUserWindowsFromCache({
+      date,
+      memberUserIds,
+      perUserStatic,
+      allOverrides,
+      busyData,
+      bookings: allBookings,
+      bufferBeforeMinutes: params.bufferBeforeMinutes ?? 0,
+      bufferAfterMinutes: params.bufferAfterMinutes ?? 0,
+      schedulingMode: params.schedulingMode,
+    });
+
+    const dayResult = sliceAndAggregate({
+      perUserWindows,
+      memberUserIds,
+      date,
+      guestTimezone: params.guestTimezone,
+      slotMode: params.slotMode,
+      durationMinutes: params.durationMinutes,
+      minNoticeMinutes: params.minNoticeMinutes ?? 0,
+      maxAdvanceDays: params.maxAdvanceDays ?? 60,
+      schedulingMode: params.schedulingMode,
+    });
+    results.push({ ...dayResult, date });
+  }
+  return results;
+}
+
+interface UserStatic {
+  schedule: typeof availabilitySchedules.$inferSelect | null;
+  rules: (typeof availabilityRules.$inferSelect)[];
+}
+
+async function fetchPerUserStatic(
+  userIds: string[]
+): Promise<Map<string, UserStatic>> {
+  const schedules = await db
+    .select()
+    .from(availabilitySchedules)
+    .where(
+      and(
+        inArray(availabilitySchedules.userId, userIds),
+        eq(availabilitySchedules.isDefault, true)
+      )
+    );
+  const scheduleIds = schedules.map((s) => s.id);
+  const rules =
+    scheduleIds.length > 0
+      ? await db
+          .select()
+          .from(availabilityRules)
+          .where(inArray(availabilityRules.scheduleId, scheduleIds))
+      : [];
+
+  const rulesByScheduleId = new Map<
+    string,
+    (typeof availabilityRules.$inferSelect)[]
+  >();
+  for (const r of rules) {
+    const arr = rulesByScheduleId.get(r.scheduleId) || [];
+    arr.push(r);
+    rulesByScheduleId.set(r.scheduleId, arr);
+  }
+
+  const map = new Map<string, UserStatic>();
+  for (const uid of userIds) {
+    const schedule = schedules.find((s) => s.userId === uid) || null;
+    map.set(uid, {
+      schedule,
+      rules: schedule ? rulesByScheduleId.get(schedule.id) || [] : [],
+    });
+  }
+  return map;
+}
+
+async function fetchAllOverrides(
+  userIds: string[],
+  start: Date,
+  end: Date
+): Promise<Map<string, (typeof availabilityOverrides.$inferSelect)[]>> {
+  const rows = await db
+    .select()
+    .from(availabilityOverrides)
+    .where(
+      and(
+        inArray(availabilityOverrides.userId, userIds),
+        gte(availabilityOverrides.date, start),
+        lte(availabilityOverrides.date, end)
+      )
+    );
+  const map = new Map<
+    string,
+    (typeof availabilityOverrides.$inferSelect)[]
+  >();
+  for (const o of rows) {
+    const arr = map.get(o.userId) || [];
+    arr.push(o);
+    map.set(o.userId, arr);
+  }
+  return map;
+}
+
+function computePerUserWindowsFromCache(params: {
+  date: string;
+  memberUserIds: string[];
+  perUserStatic: Map<string, UserStatic>;
+  allOverrides: Map<string, (typeof availabilityOverrides.$inferSelect)[]>;
+  busyData: Map<string, Array<{ start: string; end: string }>>;
+  bookings: Array<{ startTime: Date; endTime: Date; assignedUserId: string | null }>;
+  bufferBeforeMinutes: number;
+  bufferAfterMinutes: number;
+  schedulingMode: string;
+}): Map<string, RawWindow[]> {
+  const dayStartUtc = new Date(`${params.date}T00:00:00Z`);
+  const dayEndUtc = new Date(`${params.date}T23:59:59Z`);
+  const out = new Map<string, RawWindow[]>();
+
+  for (const uid of params.memberUserIds) {
+    const stat = params.perUserStatic.get(uid);
+    if (!stat || !stat.schedule) {
+      out.set(uid, []);
+      continue;
+    }
+    const dayOverrides = (params.allOverrides.get(uid) || []).filter((o) => {
+      const od = o.date;
+      return (
+        od.getTime() >= startOfDay(dayStartUtc).getTime() &&
+        od.getTime() <= endOfDay(dayEndUtc).getTime()
+      );
+    });
+    if (dayOverrides.some((o) => o.isBlocked)) {
+      out.set(uid, []);
+      continue;
+    }
+    const dow = getDayOfWeekInTimezone(
+      new Date(params.date + "T12:00:00Z"),
+      stat.schedule.timezone
+    );
+    const dayRules = stat.rules.filter((r) => r.dayOfWeek === dow);
+
+    let windows: RawWindow[] = [];
+    const overrideTimes = dayOverrides.filter(
+      (o) => !o.isBlocked && o.startTime && o.endTime
+    );
+    if (overrideTimes.length > 0) {
+      for (const o of overrideTimes) {
+        windows.push({
+          start: localTimeToUTC(params.date, o.startTime!, stat.schedule.timezone),
+          end: localTimeToUTC(params.date, o.endTime!, stat.schedule.timezone),
+        });
+      }
+    } else {
+      for (const r of dayRules) {
+        windows.push({
+          start: localTimeToUTC(params.date, r.startTime, stat.schedule.timezone),
+          end: localTimeToUTC(params.date, r.endTime, stat.schedule.timezone),
+        });
+      }
+    }
+
+    const userBusy = params.busyData.get(uid) || [];
+    for (const b of userBusy) {
+      const bs = new Date(b.start);
+      const be = new Date(b.end);
+      if (be < dayStartUtc || bs > dayEndUtc) continue;
+      windows = subtractPeriod(windows, bs, be);
+    }
+
+    const userBookings = params.bookings.filter(
+      (b) =>
+        (b.assignedUserId === uid || params.schedulingMode === "all_available") &&
+        b.endTime >= dayStartUtc &&
+        b.startTime <= dayEndUtc
+    );
+    for (const b of userBookings) {
+      const bs = addMinutes(b.startTime, -params.bufferBeforeMinutes);
+      const be = addMinutes(b.endTime, params.bufferAfterMinutes);
+      windows = subtractPeriod(windows, bs, be);
+    }
+
+    windows.sort((a, b) => a.start.getTime() - b.start.getTime());
+    out.set(uid, windows);
+  }
+  return out;
+}
+
+function sliceAndAggregate(params: {
+  perUserWindows: Map<string, RawWindow[]>;
+  memberUserIds: string[];
+  date: string;
+  guestTimezone: string;
+  slotMode: SlotMode;
+  durationMinutes: number;
+  minNoticeMinutes: number;
+  maxAdvanceDays: number;
+  schedulingMode: string;
+}): AvailabilityResult {
+  let merged: MergedWindow[];
+  switch (params.schedulingMode) {
+    case "all_available":
+      merged = intersectAllUsers(params.perUserWindows, params.memberUserIds);
+      break;
+    case "any_available":
+      merged = unionWithUsers(params.perUserWindows);
+      break;
+    case "specific_person":
+    default: {
+      const uid = params.memberUserIds[0];
+      merged = (params.perUserWindows.get(uid) || []).map((w) => ({
+        ...w,
+        userIds: [uid],
+      }));
+      break;
+    }
+  }
+
+  const now = new Date();
+  const minNotice = addMinutes(now, params.minNoticeMinutes);
+  const maxAdvance = addDays(now, params.maxAdvanceDays);
+  merged = merged
+    .map((w) => ({
+      start: w.start.getTime() < minNotice.getTime() ? minNotice : w.start,
+      end: w.end.getTime() > maxAdvance.getTime() ? maxAdvance : w.end,
+      userIds: w.userIds,
+    }))
+    .filter((w) => w.start.getTime() < w.end.getTime());
+
+  const inGuestDate = (d: Date) =>
+    formatDateInTz(d, params.guestTimezone) === params.date;
+
+  if (params.slotMode === "flexible_start") {
+    const windows: FlexibleWindow[] = [];
+    for (const w of merged) {
+      const latestStart = addMinutes(w.end, -params.durationMinutes);
+      if (latestStart.getTime() < w.start.getTime()) continue;
+      if (!inGuestDate(w.start) && !inGuestDate(latestStart)) continue;
+      const dayStart = guestDayStart(params.date, params.guestTimezone);
+      const dayEnd = guestDayEnd(params.date, params.guestTimezone);
+      const effStart = w.start.getTime() < dayStart.getTime() ? dayStart : w.start;
+      const effLatest =
+        latestStart.getTime() > dayEnd.getTime() ? dayEnd : latestStart;
+      if (effLatest.getTime() < effStart.getTime()) continue;
+      windows.push({
+        startTime: effStart.toISOString(),
+        latestStartTime: effLatest.toISOString(),
+        availableUserIds: w.userIds,
+      });
+    }
+    return { mode: "flexible_start", slots: [], windows };
+  }
+
+  const slots: TimeSlot[] = [];
+  for (const w of merged) {
+    let slotStart = w.start;
+    while (
+      addMinutes(slotStart, params.durationMinutes).getTime() <=
+      w.end.getTime()
+    ) {
+      const slotEnd = addMinutes(slotStart, params.durationMinutes);
+      if (inGuestDate(slotStart)) {
+        slots.push({
+          startTime: slotStart.toISOString(),
+          endTime: slotEnd.toISOString(),
+          availableUserIds: w.userIds,
+        });
+      }
+      slotStart = slotEnd;
+    }
+  }
+  slots.sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  );
+  return { mode: "fixed_slots", slots, windows: [] };
+}
+
 // ----- helpers -----
 
 async function computePerUserWindows(params: {
@@ -334,95 +664,27 @@ async function computePerUserWindows(params: {
         )
     : [];
 
-  const perUser = new Map<string, RawWindow[]>();
+  // Batch fetch schedules/rules/overrides for all users in parallel
+  const [perUserStatic, allOverrides] = await Promise.all([
+    fetchPerUserStatic(params.userIds),
+    fetchAllOverrides(
+      params.userIds,
+      startOfDay(new Date(params.date)),
+      endOfDay(new Date(params.date))
+    ),
+  ]);
 
-  for (const userId of params.userIds) {
-    const [schedule] = await db
-      .select()
-      .from(availabilitySchedules)
-      .where(
-        and(
-          eq(availabilitySchedules.userId, userId),
-          eq(availabilitySchedules.isDefault, true)
-        )
-      );
-
-    if (!schedule) {
-      perUser.set(userId, []);
-      continue;
-    }
-
-    const rules = await db
-      .select()
-      .from(availabilityRules)
-      .where(eq(availabilityRules.scheduleId, schedule.id));
-
-    const overrides = await db
-      .select()
-      .from(availabilityOverrides)
-      .where(
-        and(
-          eq(availabilityOverrides.userId, userId),
-          gte(availabilityOverrides.date, startOfDay(new Date(params.date))),
-          lte(availabilityOverrides.date, endOfDay(new Date(params.date)))
-        )
-      );
-
-    if (overrides.some((o) => o.isBlocked)) {
-      perUser.set(userId, []);
-      continue;
-    }
-
-    const dayOfWeek = getDayOfWeekInTimezone(
-      new Date(params.date + "T12:00:00Z"),
-      schedule.timezone
-    );
-    const dayRules = rules.filter((r) => r.dayOfWeek === dayOfWeek);
-
-    let windows: RawWindow[] = [];
-
-    if (
-      overrides.length > 0 &&
-      overrides.some((o) => !o.isBlocked && o.startTime && o.endTime)
-    ) {
-      for (const o of overrides) {
-        if (!o.isBlocked && o.startTime && o.endTime) {
-          windows.push({
-            start: localTimeToUTC(params.date, o.startTime, schedule.timezone),
-            end: localTimeToUTC(params.date, o.endTime, schedule.timezone),
-          });
-        }
-      }
-    } else {
-      for (const r of dayRules) {
-        windows.push({
-          start: localTimeToUTC(params.date, r.startTime, schedule.timezone),
-          end: localTimeToUTC(params.date, r.endTime, schedule.timezone),
-        });
-      }
-    }
-
-    const userBusy = busyData.get(userId) || [];
-    for (const b of userBusy) {
-      windows = subtractPeriod(windows, new Date(b.start), new Date(b.end));
-    }
-
-    const userBookings = existingBookings.filter(
-      (b) =>
-        b.assignedUserId === userId ||
-        params.schedulingMode === "all_available"
-    );
-    for (const b of userBookings) {
-      const bs = addMinutes(b.startTime, -params.bufferBeforeMinutes);
-      const be = addMinutes(b.endTime, params.bufferAfterMinutes);
-      windows = subtractPeriod(windows, bs, be);
-    }
-
-    windows.sort((a, b) => a.start.getTime() - b.start.getTime());
-    perUser.set(userId, windows);
-  }
-
-  return perUser;
+  return computePerUserWindowsFromCache({
+    date: params.date,
+    memberUserIds: params.userIds,
+    perUserStatic,
+    allOverrides,
+    busyData,
+    bookings: existingBookings,
+    bufferBeforeMinutes: params.bufferBeforeMinutes,
+    bufferAfterMinutes: params.bufferAfterMinutes,
+    schedulingMode: params.schedulingMode,
+  });
 }
 
 function subtractPeriod(

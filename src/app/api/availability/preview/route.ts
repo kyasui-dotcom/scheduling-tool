@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { getAvailabilityFromConfig } from "@/lib/availability-engine";
-import { addDays, format } from "date-fns";
+import { getAvailabilityRangeFromConfig } from "@/lib/availability-engine";
 
 const previewSchema = z.object({
   memberUserIds: z.array(z.string()).min(1),
@@ -43,41 +42,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const startDate = new Date(`${data.startDate}T00:00:00Z`);
-  const dates = Array.from({ length: data.days }, (_, i) =>
-    format(addDays(startDate, i), "yyyy-MM-dd")
-  );
-
   try {
-    const results = await Promise.all(
-      dates.map(async (date) => {
-        const r = await getAvailabilityFromConfig({
-          memberUserIds: data.memberUserIds,
-          date,
-          guestTimezone: data.timezone,
-          slotMode: data.slotMode,
-          durationMinutes: data.durationMinutes,
-          bufferBeforeMinutes: data.bufferBeforeMinutes,
-          bufferAfterMinutes: data.bufferAfterMinutes,
-          minNoticeMinutes: data.minNoticeMinutes,
-          maxAdvanceDays: data.maxAdvanceDays,
-          schedulingMode: data.schedulingMode,
-          excludeEventTypeId: data.excludeEventTypeId,
-        });
-        return {
-          date,
-          slotCount: r.mode === "fixed_slots" ? r.slots.length : r.windows.length,
-          firstStart:
-            r.mode === "fixed_slots"
-              ? r.slots[0]?.startTime
-              : r.windows[0]?.startTime,
-          lastEnd:
-            r.mode === "fixed_slots"
-              ? r.slots[r.slots.length - 1]?.endTime
-              : r.windows[r.windows.length - 1]?.latestStartTime,
-        };
-      })
-    );
+    const range = await getAvailabilityRangeFromConfig({
+      memberUserIds: data.memberUserIds,
+      startDate: data.startDate,
+      days: data.days,
+      guestTimezone: data.timezone,
+      slotMode: data.slotMode,
+      durationMinutes: data.durationMinutes,
+      bufferBeforeMinutes: data.bufferBeforeMinutes,
+      bufferAfterMinutes: data.bufferAfterMinutes,
+      minNoticeMinutes: data.minNoticeMinutes,
+      maxAdvanceDays: data.maxAdvanceDays,
+      schedulingMode: data.schedulingMode,
+      excludeEventTypeId: data.excludeEventTypeId,
+    });
+
+    const results = range.map((r) => ({
+      date: r.date,
+      slotCount: r.mode === "fixed_slots" ? r.slots.length : r.windows.length,
+      firstStart:
+        r.mode === "fixed_slots"
+          ? r.slots[0]?.startTime
+          : r.windows[0]?.startTime,
+      lastEnd:
+        r.mode === "fixed_slots"
+          ? r.slots[r.slots.length - 1]?.endTime
+          : r.windows[r.windows.length - 1]?.latestStartTime,
+    }));
 
     return NextResponse.json({ timezone: data.timezone, days: results });
   } catch (err) {
