@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
 
 const DAYS = [
   { key: "monday", label: "月曜日" },
@@ -25,6 +27,11 @@ interface Rule {
   enabled: boolean;
 }
 
+interface BlockedRange {
+  startDate: string;
+  endDate: string;
+}
+
 export default function AvailabilityPage() {
   const { data: session } = useSession();
   const [timezone, setTimezone] = useState("Asia/Tokyo");
@@ -40,6 +47,14 @@ export default function AvailabilityPage() {
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [blockedRanges, setBlockedRanges] = useState<BlockedRange[]>([]);
+  const [newBlockStart, setNewBlockStart] = useState(
+    format(new Date(), "yyyy-MM-dd")
+  );
+  const [newBlockEnd, setNewBlockEnd] = useState(
+    format(new Date(), "yyyy-MM-dd")
+  );
+  const [blockSaving, setBlockSaving] = useState(false);
 
   useEffect(() => {
     async function loadSchedule() {
@@ -72,6 +87,71 @@ export default function AvailabilityPage() {
     }
     loadSchedule();
   }, []);
+
+  const loadBlocked = useCallback(async () => {
+    try {
+      const res = await fetch("/api/availability/overrides");
+      if (res.ok) {
+        const data = await res.json();
+        setBlockedRanges(data.ranges || []);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBlocked();
+  }, [loadBlocked]);
+
+  async function handleAddBlock() {
+    if (newBlockEnd < newBlockStart) {
+      toast.error("終了日は開始日以降にしてください");
+      return;
+    }
+    setBlockSaving(true);
+    try {
+      const res = await fetch("/api/availability/overrides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: newBlockStart,
+          endDate: newBlockEnd,
+        }),
+      });
+      if (res.ok) {
+        toast.success("不在期間を登録しました");
+        await loadBlocked();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "登録に失敗しました");
+      }
+    } catch {
+      toast.error("登録に失敗しました");
+    } finally {
+      setBlockSaving(false);
+    }
+  }
+
+  async function handleDeleteBlock(range: BlockedRange) {
+    const label =
+      range.startDate === range.endDate
+        ? range.startDate
+        : `${range.startDate} 〜 ${range.endDate}`;
+    if (!confirm(`${label} の不在期間を削除しますか？`)) return;
+    try {
+      const url = `/api/availability/overrides?startDate=${range.startDate}&endDate=${range.endDate}`;
+      const res = await fetch(url, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("削除しました");
+        await loadBlocked();
+      } else {
+        toast.error("削除に失敗しました");
+      }
+    } catch {
+      toast.error("削除に失敗しました");
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -200,6 +280,100 @@ export default function AvailabilityPage() {
       <Button onClick={handleSave} disabled={saving} className="w-full">
         {saving ? "保存中..." : "保存"}
       </Button>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">不在期間（出張・休暇）</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            ここに登録した期間は全イベントで予約不可になります（通常の曜日設定を上書き）
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-end gap-2 flex-wrap">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                開始日
+              </label>
+              <Input
+                type="date"
+                value={newBlockStart}
+                onChange={(e) => {
+                  setNewBlockStart(e.target.value);
+                  if (newBlockEnd < e.target.value)
+                    setNewBlockEnd(e.target.value);
+                }}
+                className="w-40"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                終了日
+              </label>
+              <Input
+                type="date"
+                value={newBlockEnd}
+                min={newBlockStart}
+                onChange={(e) => setNewBlockEnd(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <Button
+              onClick={handleAddBlock}
+              disabled={blockSaving}
+              size="sm"
+            >
+              {blockSaving ? "登録中..." : "不在期間を追加"}
+            </Button>
+          </div>
+
+          {blockedRanges.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              登録された不在期間はありません
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {blockedRanges.map((r) => {
+                const start = new Date(`${r.startDate}T00:00:00`);
+                const end = new Date(`${r.endDate}T00:00:00`);
+                const isSingle = r.startDate === r.endDate;
+                const days =
+                  Math.round(
+                    (end.getTime() - start.getTime()) / 86400000
+                  ) + 1;
+                return (
+                  <div
+                    key={`${r.startDate}_${r.endDate}`}
+                    className="flex items-center justify-between border rounded-md px-3 py-2"
+                  >
+                    <div className="text-sm">
+                      <span className="font-mono">
+                        {format(start, "yyyy/M/d(E)", { locale: ja })}
+                        {!isSingle && (
+                          <>
+                            {" 〜 "}
+                            {format(end, "yyyy/M/d(E)", { locale: ja })}
+                          </>
+                        )}
+                      </span>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        ({days}日間)
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteBlock(r)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      削除
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
