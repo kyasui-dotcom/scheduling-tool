@@ -16,12 +16,14 @@ interface MemberPickerProps {
   selectedMembers: Member[];
   onMembersChange: (members: Member[]) => void;
   schedulingMode: string;
+  owner?: Member | null;
 }
 
 export function MemberPicker({
   selectedMembers,
   onMembersChange,
   schedulingMode,
+  owner,
 }: MemberPickerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Member[]>([]);
@@ -132,9 +134,32 @@ export function MemberPicker({
         </p>
       </div>
 
-      {/* Selected members */}
-      {selectedMembers.length > 0 && (
+      {/* Owner (locked) + selected members */}
+      {(owner || selectedMembers.length > 0) && (
         <div className="flex flex-wrap gap-2">
+          {owner && (
+            <Badge
+              variant="default"
+              className="flex items-center gap-1.5 py-1 px-2.5"
+              title="イベント作成者は自動的にメンバーに含まれます"
+            >
+              {owner.image ? (
+                <img
+                  src={owner.image}
+                  alt=""
+                  className="w-4 h-4 rounded-full"
+                />
+              ) : (
+                <div className="w-4 h-4 rounded-full bg-primary-foreground/30 flex items-center justify-center text-[8px] font-medium">
+                  {(owner.name || owner.email)[0].toUpperCase()}
+                </div>
+              )}
+              <span className="text-xs">
+                {owner.name || owner.email}
+              </span>
+              <span className="text-[10px] opacity-80 ml-0.5">（あなた）</span>
+            </Badge>
+          )}
           {selectedMembers.map((member) => (
             <Badge
               key={member.id}
@@ -246,7 +271,7 @@ export function MemberPicker({
         )}
       </div>
 
-      {selectedMembers.length === 0 && (
+      {selectedMembers.length === 0 && !owner && (
         <p className="text-xs text-amber-600">
           ※ メンバーが追加されていません。あなたのみがメンバーとして登録されます。
         </p>

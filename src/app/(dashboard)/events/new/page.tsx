@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MemberPicker } from "@/components/member-picker";
+import { AvailabilityPreview } from "@/components/availability-preview";
 import { CustomQuestionEditor } from "@/components/custom-question-editor";
 import type { CustomQuestion } from "@/lib/validations/event";
 import { toast } from "sonner";
@@ -31,7 +32,15 @@ export default function NewEventPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<Member[]>([]);
+  const [owner, setOwner] = useState<Member | null>(null);
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
+
+  useEffect(() => {
+    fetch("/api/users/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((u) => u && setOwner(u))
+      .catch(() => {});
+  }, []);
   const [form, setForm] = useState({
     title: "",
     slug: "",
@@ -289,6 +298,33 @@ export default function NewEventPage() {
                 selectedMembers={selectedMembers}
                 onMembersChange={setSelectedMembers}
                 schedulingMode={form.schedulingMode}
+                owner={owner}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Availability Preview */}
+        {owner && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">空き予定プレビュー</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AvailabilityPreview
+                memberUserIds={[
+                  owner.id,
+                  ...selectedMembers
+                    .map((m) => m.id)
+                    .filter((id) => id !== owner.id),
+                ]}
+                durationMinutes={form.durationMinutes}
+                schedulingMode={form.schedulingMode}
+                slotMode={form.slotMode}
+                bufferBeforeMinutes={form.bufferBeforeMinutes}
+                bufferAfterMinutes={form.bufferAfterMinutes}
+                minNoticeMinutes={form.minNoticeMinutes}
+                maxAdvanceDays={form.maxAdvanceDays}
               />
             </CardContent>
           </Card>

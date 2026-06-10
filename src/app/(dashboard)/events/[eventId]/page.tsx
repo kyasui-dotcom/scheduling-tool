@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { MemberPicker } from "@/components/member-picker";
+import { AvailabilityPreview } from "@/components/availability-preview";
 import { CustomQuestionEditor } from "@/components/custom-question-editor";
 import type { CustomQuestion } from "@/lib/validations/event";
 import { toast } from "sonner";
@@ -39,6 +40,7 @@ export default function EditEventPage({
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedMembers, setSelectedMembers] = useState<Member[]>([]);
+  const [owner, setOwner] = useState<Member | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
   const [form, setForm] = useState({
@@ -84,6 +86,12 @@ export default function EditEventPage({
           if (data.customQuestions) {
             setCustomQuestions(data.customQuestions);
           }
+
+          // Fetch owner profile to display as locked badge in MemberPicker
+          fetch(`/api/users/details?ids=${data.userId}`)
+            .then((r) => (r.ok ? r.json() : []))
+            .then((arr) => arr[0] && setOwner(arr[0]))
+            .catch(() => {});
 
           // Load member details if there are members beyond the owner
           if (data.members && data.members.length > 0) {
@@ -368,6 +376,43 @@ export default function EditEventPage({
                 selectedMembers={selectedMembers}
                 onMembersChange={setSelectedMembers}
                 schedulingMode={form.schedulingMode}
+                owner={owner}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Availability Preview */}
+        {(owner || currentUserId) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">空き予定プレビュー</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AvailabilityPreview
+                memberUserIds={[
+                  ...(owner ? [owner.id] : [currentUserId]),
+                  ...selectedMembers
+                    .map((m) => m.id)
+                    .filter(
+                      (id) => id !== (owner ? owner.id : currentUserId)
+                    ),
+                ]}
+                durationMinutes={form.durationMinutes}
+                schedulingMode={
+                  form.schedulingMode as
+                    | "any_available"
+                    | "all_available"
+                    | "specific_person"
+                }
+                slotMode={
+                  form.slotMode as "fixed_slots" | "flexible_start"
+                }
+                bufferBeforeMinutes={form.bufferBeforeMinutes}
+                bufferAfterMinutes={form.bufferAfterMinutes}
+                minNoticeMinutes={form.minNoticeMinutes}
+                maxAdvanceDays={form.maxAdvanceDays}
+                excludeEventTypeId={eventId}
               />
             </CardContent>
           </Card>

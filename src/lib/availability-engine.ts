@@ -55,8 +55,6 @@ export async function getAvailability(params: {
     return { mode: "fixed_slots", slots: [], windows: [] };
   }
 
-  const mode: SlotMode = eventType.slotMode ?? "fixed_slots";
-
   const members = await db
     .select({ userId: eventTypeMembers.userId })
     .from(eventTypeMembers)
@@ -65,19 +63,81 @@ export async function getAvailability(params: {
   const memberUserIds =
     members.length > 0 ? members.map((m) => m.userId) : [eventType.userId];
 
+  return computeAvailability({
+    memberUserIds,
+    eventTypeId: params.eventTypeId,
+    date: params.date,
+    guestTimezone: params.guestTimezone,
+    slotMode: eventType.slotMode ?? "fixed_slots",
+    durationMinutes: eventType.durationMinutes,
+    bufferBeforeMinutes: eventType.bufferBeforeMinutes || 0,
+    bufferAfterMinutes: eventType.bufferAfterMinutes || 0,
+    minNoticeMinutes: eventType.minNoticeMinutes || 0,
+    maxAdvanceDays: eventType.maxAdvanceDays || 60,
+    schedulingMode: eventType.schedulingMode,
+  });
+}
+
+/**
+ * Compute availability from raw config (no saved event_type required).
+ * Used by preview UI on the event setup screen.
+ */
+export async function getAvailabilityFromConfig(params: {
+  memberUserIds: string[];
+  date: string;
+  guestTimezone: string;
+  slotMode: SlotMode;
+  durationMinutes: number;
+  bufferBeforeMinutes?: number;
+  bufferAfterMinutes?: number;
+  minNoticeMinutes?: number;
+  maxAdvanceDays?: number;
+  schedulingMode: "any_available" | "all_available" | "specific_person";
+  excludeEventTypeId?: string;
+}): Promise<AvailabilityResult> {
+  return computeAvailability({
+    memberUserIds: params.memberUserIds,
+    eventTypeId: params.excludeEventTypeId ?? null,
+    date: params.date,
+    guestTimezone: params.guestTimezone,
+    slotMode: params.slotMode,
+    durationMinutes: params.durationMinutes,
+    bufferBeforeMinutes: params.bufferBeforeMinutes ?? 0,
+    bufferAfterMinutes: params.bufferAfterMinutes ?? 0,
+    minNoticeMinutes: params.minNoticeMinutes ?? 0,
+    maxAdvanceDays: params.maxAdvanceDays ?? 60,
+    schedulingMode: params.schedulingMode,
+  });
+}
+
+async function computeAvailability(params: {
+  memberUserIds: string[];
+  eventTypeId: string | null;
+  date: string;
+  guestTimezone: string;
+  slotMode: SlotMode;
+  durationMinutes: number;
+  bufferBeforeMinutes: number;
+  bufferAfterMinutes: number;
+  minNoticeMinutes: number;
+  maxAdvanceDays: number;
+  schedulingMode: string;
+}): Promise<AvailabilityResult> {
+  const mode = params.slotMode;
+  const memberUserIds = params.memberUserIds;
+
   const perUserWindows = await computePerUserWindows({
     userIds: memberUserIds,
     eventTypeId: params.eventTypeId,
     date: params.date,
-    durationMinutes: eventType.durationMinutes,
-    bufferBeforeMinutes: eventType.bufferBeforeMinutes || 0,
-    bufferAfterMinutes: eventType.bufferAfterMinutes || 0,
-    schedulingMode: eventType.schedulingMode,
+    durationMinutes: params.durationMinutes,
+    bufferBeforeMinutes: params.bufferBeforeMinutes,
+    bufferAfterMinutes: params.bufferAfterMinutes,
+    schedulingMode: params.schedulingMode,
   });
 
-  // Aggregate per-user windows by scheduling mode
   let merged: MergedWindow[];
-  switch (eventType.schedulingMode) {
+  switch (params.schedulingMode) {
     case "all_available":
       merged = intersectAllUsers(perUserWindows, memberUserIds);
       break;
@@ -95,10 +155,9 @@ export async function getAvailability(params: {
     }
   }
 
-  // Clamp by minNotice / maxAdvance
   const now = new Date();
-  const minNotice = addMinutes(now, eventType.minNoticeMinutes || 0);
-  const maxAdvance = addDays(now, eventType.maxAdvanceDays || 60);
+  const minNotice = addMinutes(now, params.minNoticeMinutes);
+  const maxAdvance = addDays(now, params.maxAdvanceDays);
   merged = merged
     .map((w) => ({
       start: w.start.getTime() < minNotice.getTime() ? minNotice : w.start,
@@ -113,11 +172,9 @@ export async function getAvailability(params: {
   if (mode === "flexible_start") {
     const windows: FlexibleWindow[] = [];
     for (const w of merged) {
-      const latestStart = addMinutes(w.end, -eventType.durationMinutes);
+      const latestStart = addMinutes(w.end, -params.durationMinutes);
       if (latestStart.getTime() < w.start.getTime()) continue;
-      // Keep windows that have ANY valid start on the target guest date
       if (!inGuestDate(w.start) && !inGuestDate(latestStart)) continue;
-      // Clip to the guest date's bounds so the picker shows times within the chosen day
       const dayStart = guestDayStart(params.date, params.guestTimezone);
       const dayEnd = guestDayEnd(params.date, params.guestTimezone);
       const effStart = w.start.getTime() < dayStart.getTime() ? dayStart : w.start;
@@ -133,15 +190,14 @@ export async function getAvailability(params: {
     return { mode, slots: [], windows };
   }
 
-  // fixed_slots: slice merged windows into duration-sized slots
   const slots: TimeSlot[] = [];
   for (const w of merged) {
     let slotStart = w.start;
     while (
-      addMinutes(slotStart, eventType.durationMinutes).getTime() <=
+      addMinutes(slotStart, params.durationMinutes).getTime() <=
       w.end.getTime()
     ) {
-      const slotEnd = addMinutes(slotStart, eventType.durationMinutes);
+      const slotEnd = addMinutes(slotStart, params.durationMinutes);
       if (inGuestDate(slotStart)) {
         slots.push({
           startTime: slotStart.toISOString(),
@@ -242,7 +298,7 @@ export async function selectAssignee(
 
 async function computePerUserWindows(params: {
   userIds: string[];
-  eventTypeId: string;
+  eventTypeId: string | null;
   date: string;
   durationMinutes: number;
   bufferBeforeMinutes: number;
@@ -260,21 +316,23 @@ async function computePerUserWindows(params: {
     queryEnd.toISOString()
   );
 
-  const existingBookings = await db
-    .select({
-      startTime: bookings.startTime,
-      endTime: bookings.endTime,
-      assignedUserId: bookings.assignedUserId,
-    })
-    .from(bookings)
-    .where(
-      and(
-        eq(bookings.eventTypeId, params.eventTypeId),
-        eq(bookings.status, "confirmed"),
-        gte(bookings.startTime, queryStart),
-        lte(bookings.endTime, queryEnd)
-      )
-    );
+  const existingBookings = params.eventTypeId
+    ? await db
+        .select({
+          startTime: bookings.startTime,
+          endTime: bookings.endTime,
+          assignedUserId: bookings.assignedUserId,
+        })
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.eventTypeId, params.eventTypeId),
+            eq(bookings.status, "confirmed"),
+            gte(bookings.startTime, queryStart),
+            lte(bookings.endTime, queryEnd)
+          )
+        )
+    : [];
 
   const perUser = new Map<string, RawWindow[]>();
 
