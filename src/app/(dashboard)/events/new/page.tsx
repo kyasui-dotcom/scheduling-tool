@@ -32,13 +32,24 @@ export default function NewEventPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<Member[]>([]);
+  const [me, setMe] = useState<Member | null>(null);
   const [owner, setOwner] = useState<Member | null>(null);
+  const [sameDomainUsers, setSameDomainUsers] = useState<Member[]>([]);
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
 
   useEffect(() => {
     fetch("/api/users/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((u) => u && setOwner(u))
+      .then((u) => {
+        if (u) {
+          setMe(u);
+          setOwner(u);
+        }
+      })
+      .catch(() => {});
+    fetch("/api/users/same-domain")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((arr) => setSameDomainUsers(arr || []))
       .catch(() => {});
   }, []);
   const [form, setForm] = useState({
@@ -85,6 +96,7 @@ export default function NewEventPage() {
     try {
       const payload = {
         ...form,
+        ownerUserId: owner && me && owner.id !== me.id ? owner.id : undefined,
         memberUserIds: selectedMembers.map((m) => m.id),
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
       };
@@ -124,6 +136,33 @@ export default function NewEventPage() {
             <CardTitle className="text-base">基本情報</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {sameDomainUsers.length > 1 && (
+              <div>
+                <Label>オーナー（カレンダー所有者）</Label>
+                <Select
+                  value={owner?.id || ""}
+                  onValueChange={(v) => {
+                    const u = sameDomainUsers.find((u) => u.id === v) || me;
+                    setOwner(u);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sameDomainUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name || u.email}
+                        {me && u.id === me.id ? "（自分）" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  予約はオーナーのGoogleカレンダーに作成されます。同じメールドメインのユーザーを選択できます。
+                </p>
+              </div>
+            )}
             <div>
               <Label htmlFor="title">タイトル</Label>
               <Input

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmbedDialog } from "@/components/embed-dialog";
+import { getManagedUserIds } from "@/lib/auth-helpers";
 
 export default async function EventsPage() {
   const session = await auth();
@@ -17,15 +18,33 @@ export default async function EventsPage() {
     .from(users)
     .where(eq(users.id, session.user.id));
 
+  const managedIds = await getManagedUserIds(session.user.id);
+
   const events = await db
     .select()
     .from(eventTypes)
-    .where(eq(eventTypes.userId, session.user.id))
+    .where(inArray(eventTypes.userId, managedIds))
     .orderBy(eventTypes.createdAt);
+
+  // Look up owner profiles to render "owner" badge
+  const ownerIds = Array.from(new Set(events.map((e) => e.userId)));
+  const ownerProfiles =
+    ownerIds.length > 0
+      ? await db
+          .select({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            username: users.username,
+          })
+          .from(users)
+          .where(inArray(users.id, ownerIds))
+      : [];
+  const ownerById = new Map(ownerProfiles.map((u) => [u.id, u]));
 
   // Get member counts for all events
   const eventIds = events.map((e) => e.id);
-  let membersByEvent: Record<string, { userId: string }[]> = {};
+  const membersByEvent: Record<string, { userId: string }[]> = {};
   if (eventIds.length > 0) {
     const allMembers = await db
       .select({ eventTypeId: eventTypeMembers.eventTypeId, userId: eventTypeMembers.userId })
@@ -70,6 +89,9 @@ export default async function EventsPage() {
           {events.map((event) => {
             const members = membersByEvent[event.id] || [];
             const memberCount = members.length;
+            const ownerProfile = ownerById.get(event.userId);
+            const isOwn = event.userId === session.user!.id;
+            const ownerUsername = ownerProfile?.username || user?.username;
             return (
               <Card key={event.id}>
                 <CardHeader className="pb-2">
@@ -80,6 +102,11 @@ export default async function EventsPage() {
                     />
                     <CardTitle className="text-base">{event.title}</CardTitle>
                   </div>
+                  {!isOwn && ownerProfile && (
+                    <p className="text-xs text-amber-700 mt-1">
+                      代理管理: {ownerProfile.name || ownerProfile.email} のカレンダー
+                    </p>
+                  )}
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -113,7 +140,7 @@ export default async function EventsPage() {
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground bg-muted p-2 rounded font-mono truncate">
-                      {appUrl}/{user?.username}/{event.slug}
+                      {appUrl}/{ownerUsername}/{event.slug}
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" asChild>
@@ -121,14 +148,14 @@ export default async function EventsPage() {
                       </Button>
                       <Button variant="ghost" size="sm" asChild>
                         <Link
-                          href={`/${user?.username}/${event.slug}`}
+                          href={`/${ownerUsername}/${event.slug}`}
                           target="_blank"
                         >
                           プレビュー
                         </Link>
                       </Button>
                       <EmbedDialog
-                        username={user?.username || ""}
+                        username={ownerUsername || ""}
                         slug={event.slug}
                         appUrl={appUrl}
                       />

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { eventTypes, eventTypeMembers } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { updateEventTypeSchema } from "@/lib/validations/event";
+import { canManageEventsOf } from "@/lib/auth-helpers";
 
 export async function GET(
   _req: NextRequest,
@@ -18,15 +19,18 @@ export async function GET(
   const [eventType] = await db
     .select()
     .from(eventTypes)
-    .where(
-      and(
-        eq(eventTypes.id, eventId),
-        eq(eventTypes.userId, session.user.id)
-      )
-    );
+    .where(eq(eventTypes.id, eventId));
 
   if (!eventType) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const allowed = await canManageEventsOf({
+    viewerUserId: session.user.id,
+    targetUserId: eventType.userId,
+  });
+  if (!allowed) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const members = await db
@@ -56,25 +60,41 @@ export async function PATCH(
     );
   }
 
-  const { memberUserIds, ...updateData } = parsed.data;
+  // ownerUserId is ignored on update — owner is fixed at creation time
+  const { memberUserIds, ...rest } = parsed.data;
+  const updateData = { ...rest };
+  delete (updateData as { ownerUserId?: string }).ownerUserId;
+
+  // Load the event to determine its owner
+  const [existing] = await db
+    .select()
+    .from(eventTypes)
+    .where(eq(eventTypes.id, eventId));
+
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const allowed = await canManageEventsOf({
+    viewerUserId: session.user.id,
+    targetUserId: existing.userId,
+  });
+  if (!allowed) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   try {
     const [updated] = await db
       .update(eventTypes)
       .set({ ...updateData, updatedAt: new Date() })
-      .where(
-        and(
-          eq(eventTypes.id, eventId),
-          eq(eventTypes.userId, session.user.id)
-        )
-      )
+      .where(eq(eventTypes.id, eventId))
       .returning();
 
     if (!updated) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Update members if provided
+    // Update members if provided. The event's owner (existing.userId) stays in.
     if (memberUserIds) {
       await db
         .delete(eventTypeMembers)
@@ -82,8 +102,8 @@ export async function PATCH(
 
       const allMemberIds = Array.from(
         new Set([
-          session.user!.id,
-          ...memberUserIds.filter((id) => id !== session.user!.id),
+          existing.userId,
+          ...memberUserIds.filter((id) => id !== existing.userId),
         ])
       );
       await db.insert(eventTypeMembers).values(
@@ -115,19 +135,24 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [deleted] = await db
-    .delete(eventTypes)
-    .where(
-      and(
-        eq(eventTypes.id, eventId),
-        eq(eventTypes.userId, session.user.id)
-      )
-    )
-    .returning();
+  const [existing] = await db
+    .select()
+    .from(eventTypes)
+    .where(eq(eventTypes.id, eventId));
 
-  if (!deleted) {
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  const allowed = await canManageEventsOf({
+    viewerUserId: session.user.id,
+    targetUserId: existing.userId,
+  });
+  if (!allowed) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  await db.delete(eventTypes).where(eq(eventTypes.id, eventId));
 
   return NextResponse.json({ success: true });
 }

@@ -42,6 +42,7 @@ export const createEventTypeSchema = z.object({
   bufferAfterMinutes: z.number().int().min(0).max(120).optional(),
   minNoticeMinutes: z.number().int().min(0).optional(),
   maxAdvanceDays: z.number().int().min(1).max(365).optional(),
+  ownerUserId: z.string().optional(),
   memberUserIds: z.array(z.string()).optional(),
   customQuestions: z.array(customQuestionSchema).optional(),
 });
