@@ -17,21 +17,26 @@ import { createZoomMeeting } from "@/lib/zoom";
 import { addMinutes } from "date-fns";
 import { getDateStringInTimezone } from "@/lib/timezone";
 
+const LEGACY_PRESETS: Record<string, string> = {
+  title_first: "{title}{company}/{name}様",
+  company_first: "{company}/{name}様 {title}",
+  company_only: "{company} {title}",
+};
+const DEFAULT_TEMPLATE = "{title}{company}/{name}様";
+
 function formatCalendarTitle(
-  format: string | null | undefined,
+  template: string | null | undefined,
   eventTitle: string,
   company: string,
   guestName: string
 ): string {
-  switch (format) {
-    case "company_first":
-      return `${company}/${guestName}様 ${eventTitle}`;
-    case "company_only":
-      return `${company} ${eventTitle}`;
-    case "title_first":
-    default:
-      return `${eventTitle}${company}/${guestName}様`;
-  }
+  let t = template || DEFAULT_TEMPLATE;
+  // Backwards compat: events created before free-text templates may store preset names
+  if (LEGACY_PRESETS[t]) t = LEGACY_PRESETS[t];
+  return t
+    .replaceAll("{title}", eventTitle)
+    .replaceAll("{company}", company)
+    .replaceAll("{name}", guestName);
 }
 
 export async function GET() {

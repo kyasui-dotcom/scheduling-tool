@@ -52,9 +52,7 @@ export const createEventTypeSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable()
     .optional(),
-  calendarTitleFormat: z
-    .enum(["title_first", "company_first", "company_only"])
-    .optional(),
+  calendarTitleFormat: z.string().min(1).max(255).optional(),
   ownerUserId: z.string().optional(),
   memberUserIds: z.array(z.string()).optional(),
   customQuestions: z.array(customQuestionSchema).optional(),

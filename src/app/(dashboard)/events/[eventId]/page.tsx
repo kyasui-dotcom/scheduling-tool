@@ -76,7 +76,14 @@ export default function EditEventPage({
             meetingPlatform: data.meetingPlatform || "google_meet",
             schedulingMode: data.schedulingMode || "specific_person",
             slotMode: data.slotMode || "fixed_slots",
-            calendarTitleFormat: data.calendarTitleFormat || "title_first",
+            calendarTitleFormat:
+              ({
+                title_first: "{title}{company}/{name}様",
+                company_first: "{company}/{name}様 {title}",
+                company_only: "{company} {title}",
+              } as Record<string, string>)[data.calendarTitleFormat] ||
+              data.calendarTitleFormat ||
+              "{title}{company}/{name}様",
             color: data.color || "#6366f1",
             isActive: data.isActive ?? true,
             bufferBeforeMinutes: data.bufferBeforeMinutes || 0,
@@ -548,29 +555,37 @@ export default function EditEventPage({
               )}
             </div>
             <div className="border-t pt-4">
-              <Label>カレンダーイベントのタイトル形式</Label>
-              <Select
+              <Label htmlFor="calendarTitleFormat">
+                カレンダーイベントのタイトル形式
+              </Label>
+              <Input
+                id="calendarTitleFormat"
                 value={form.calendarTitleFormat}
-                onValueChange={(v) => updateField("calendarTitleFormat", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="title_first">
-                    イベント名 + 社名/担当者名様 （例: 30分商談株式会社A/山田太郎様）
-                  </SelectItem>
-                  <SelectItem value="company_first">
-                    社名/担当者名様 + イベント名 （例: 株式会社A/山田太郎様 30分商談）
-                  </SelectItem>
-                  <SelectItem value="company_only">
-                    社名 + イベント名 （例: 株式会社A 30分商談）
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Googleカレンダー一覧で会社名を頭に出したい場合は「社名/担当者名様 + イベント名」を選択してください
-              </p>
+                onChange={(e) =>
+                  updateField("calendarTitleFormat", e.target.value)
+                }
+                placeholder="{title}{company}/{name}様"
+                className="font-mono"
+              />
+              <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                <p>
+                  プレースホルダー: <code className="bg-muted px-1 rounded">{"{title}"}</code> イベント名 /{" "}
+                  <code className="bg-muted px-1 rounded">{"{company}"}</code> 社名 /{" "}
+                  <code className="bg-muted px-1 rounded">{"{name}"}</code> 担当者名
+                </p>
+                <p>
+                  もともとの形式: <code className="bg-muted px-1 rounded">{"{title}{company}/{name}様"}</code>
+                </p>
+                <p>
+                  プレビュー:{" "}
+                  <span className="font-mono">
+                    {(form.calendarTitleFormat || "{title}{company}/{name}様")
+                      .replaceAll("{title}", form.title || "30分商談")
+                      .replaceAll("{company}", "株式会社A")
+                      .replaceAll("{name}", "山田太郎")}
+                  </span>
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -138,9 +138,9 @@ export const eventTypes = pgTable(
     maxAdvanceDays: integer("max_advance_days").default(60),
     bookingWindowStart: text("booking_window_start"), // YYYY-MM-DD, optional absolute start
     bookingWindowEnd: text("booking_window_end"),     // YYYY-MM-DD, optional absolute end
-    calendarTitleFormat: varchar("calendar_title_format", { length: 32 })
+    calendarTitleFormat: text("calendar_title_format")
       .notNull()
-      .default("title_first"),
+      .default("{title}{company}/{name}様"),
     customQuestions: jsonb("custom_questions").$type<
       Array<{
         id: string;

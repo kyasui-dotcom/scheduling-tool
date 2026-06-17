@@ -63,10 +63,7 @@ export default function NewEventPage() {
       | "all_available"
       | "specific_person",
     slotMode: "fixed_slots" as "fixed_slots" | "flexible_start",
-    calendarTitleFormat: "title_first" as
-      | "title_first"
-      | "company_first"
-      | "company_only",
+    calendarTitleFormat: "{title}{company}/{name}様",
     color: "#6366f1",
     bufferBeforeMinutes: 0,
     bufferAfterMinutes: 0,
@@ -502,29 +499,37 @@ export default function NewEventPage() {
               )}
             </div>
             <div className="border-t pt-4">
-              <Label>カレンダーイベントのタイトル形式</Label>
-              <Select
+              <Label htmlFor="calendarTitleFormat">
+                カレンダーイベントのタイトル形式
+              </Label>
+              <Input
+                id="calendarTitleFormat"
                 value={form.calendarTitleFormat}
-                onValueChange={(v) => updateField("calendarTitleFormat", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="title_first">
-                    イベント名 + 社名/担当者名様
-                  </SelectItem>
-                  <SelectItem value="company_first">
-                    社名/担当者名様 + イベント名
-                  </SelectItem>
-                  <SelectItem value="company_only">
-                    社名 + イベント名
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Googleカレンダー一覧で会社名を頭に出したい場合は「社名/担当者名様 + イベント名」推奨
-              </p>
+                onChange={(e) =>
+                  updateField("calendarTitleFormat", e.target.value)
+                }
+                placeholder="{title}{company}/{name}様"
+                className="font-mono"
+              />
+              <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                <p>
+                  プレースホルダー: <code className="bg-muted px-1 rounded">{"{title}"}</code> イベント名 /{" "}
+                  <code className="bg-muted px-1 rounded">{"{company}"}</code> 社名 /{" "}
+                  <code className="bg-muted px-1 rounded">{"{name}"}</code> 担当者名
+                </p>
+                <p>
+                  もともとの形式: <code className="bg-muted px-1 rounded">{"{title}{company}/{name}様"}</code>
+                </p>
+                <p>
+                  プレビュー:{" "}
+                  <span className="font-mono">
+                    {(form.calendarTitleFormat || "{title}{company}/{name}様")
+                      .replaceAll("{title}", form.title || "30分商談")
+                      .replaceAll("{company}", "株式会社A")
+                      .replaceAll("{name}", "山田太郎")}
+                  </span>
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
