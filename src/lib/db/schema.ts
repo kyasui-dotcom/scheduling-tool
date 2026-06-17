@@ -136,6 +136,11 @@ export const eventTypes = pgTable(
     bufferAfterMinutes: integer("buffer_after_minutes").default(0),
     minNoticeMinutes: integer("min_notice_minutes").default(60),
     maxAdvanceDays: integer("max_advance_days").default(60),
+    bookingWindowStart: text("booking_window_start"), // YYYY-MM-DD, optional absolute start
+    bookingWindowEnd: text("booking_window_end"),     // YYYY-MM-DD, optional absolute end
+    calendarTitleFormat: varchar("calendar_title_format", { length: 32 })
+      .notNull()
+      .default("title_first"),
     customQuestions: jsonb("custom_questions").$type<
       Array<{
         id: string;

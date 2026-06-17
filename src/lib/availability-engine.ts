@@ -75,6 +75,8 @@ export async function getAvailability(params: {
     minNoticeMinutes: eventType.minNoticeMinutes || 0,
     maxAdvanceDays: eventType.maxAdvanceDays || 60,
     schedulingMode: eventType.schedulingMode,
+    bookingWindowStart: eventType.bookingWindowStart,
+    bookingWindowEnd: eventType.bookingWindowEnd,
   });
 }
 
@@ -94,6 +96,8 @@ export async function getAvailabilityFromConfig(params: {
   maxAdvanceDays?: number;
   schedulingMode: "any_available" | "all_available" | "specific_person";
   excludeEventTypeId?: string;
+  bookingWindowStart?: string | null;
+  bookingWindowEnd?: string | null;
 }): Promise<AvailabilityResult> {
   return computeAvailability({
     memberUserIds: params.memberUserIds,
@@ -107,6 +111,8 @@ export async function getAvailabilityFromConfig(params: {
     minNoticeMinutes: params.minNoticeMinutes ?? 0,
     maxAdvanceDays: params.maxAdvanceDays ?? 60,
     schedulingMode: params.schedulingMode,
+    bookingWindowStart: params.bookingWindowStart,
+    bookingWindowEnd: params.bookingWindowEnd,
   });
 }
 
@@ -122,6 +128,8 @@ async function computeAvailability(params: {
   minNoticeMinutes: number;
   maxAdvanceDays: number;
   schedulingMode: string;
+  bookingWindowStart?: string | null;
+  bookingWindowEnd?: string | null;
 }): Promise<AvailabilityResult> {
   const mode = params.slotMode;
   const memberUserIds = params.memberUserIds;
@@ -155,16 +163,12 @@ async function computeAvailability(params: {
     }
   }
 
-  const now = new Date();
-  const minNotice = addMinutes(now, params.minNoticeMinutes);
-  const maxAdvance = addDays(now, params.maxAdvanceDays);
-  merged = merged
-    .map((w) => ({
-      start: w.start.getTime() < minNotice.getTime() ? minNotice : w.start,
-      end: w.end.getTime() > maxAdvance.getTime() ? maxAdvance : w.end,
-      userIds: w.userIds,
-    }))
-    .filter((w) => w.start.getTime() < w.end.getTime());
+  merged = clampToBookingWindow(merged, {
+    minNoticeMinutes: params.minNoticeMinutes,
+    maxAdvanceDays: params.maxAdvanceDays,
+    bookingWindowStart: params.bookingWindowStart,
+    bookingWindowEnd: params.bookingWindowEnd,
+  });
 
   const inGuestDate = (d: Date) =>
     formatDateInTz(d, params.guestTimezone) === params.date;
@@ -331,6 +335,8 @@ export async function getAvailabilityRange(params: {
     maxAdvanceDays: eventType.maxAdvanceDays || 60,
     schedulingMode: eventType.schedulingMode,
     excludeEventTypeId: params.eventTypeId,
+    bookingWindowStart: eventType.bookingWindowStart,
+    bookingWindowEnd: eventType.bookingWindowEnd,
   });
 }
 
@@ -353,6 +359,8 @@ export async function getAvailabilityRangeFromConfig(params: {
   maxAdvanceDays?: number;
   schedulingMode: "any_available" | "all_available" | "specific_person";
   excludeEventTypeId?: string;
+  bookingWindowStart?: string | null;
+  bookingWindowEnd?: string | null;
 }): Promise<Array<AvailabilityResult & { date: string }>> {
   const memberUserIds = params.memberUserIds;
   const startDate = new Date(`${params.startDate}T00:00:00Z`);
@@ -411,6 +419,8 @@ export async function getAvailabilityRangeFromConfig(params: {
       minNoticeMinutes: params.minNoticeMinutes ?? 0,
       maxAdvanceDays: params.maxAdvanceDays ?? 60,
       schedulingMode: params.schedulingMode,
+      bookingWindowStart: params.bookingWindowStart,
+      bookingWindowEnd: params.bookingWindowEnd,
     });
     results.push({ ...dayResult, date });
   }
@@ -585,6 +595,8 @@ function sliceAndAggregate(params: {
   minNoticeMinutes: number;
   maxAdvanceDays: number;
   schedulingMode: string;
+  bookingWindowStart?: string | null;
+  bookingWindowEnd?: string | null;
 }): AvailabilityResult {
   let merged: MergedWindow[];
   switch (params.schedulingMode) {
@@ -605,16 +617,12 @@ function sliceAndAggregate(params: {
     }
   }
 
-  const now = new Date();
-  const minNotice = addMinutes(now, params.minNoticeMinutes);
-  const maxAdvance = addDays(now, params.maxAdvanceDays);
-  merged = merged
-    .map((w) => ({
-      start: w.start.getTime() < minNotice.getTime() ? minNotice : w.start,
-      end: w.end.getTime() > maxAdvance.getTime() ? maxAdvance : w.end,
-      userIds: w.userIds,
-    }))
-    .filter((w) => w.start.getTime() < w.end.getTime());
+  merged = clampToBookingWindow(merged, {
+    minNoticeMinutes: params.minNoticeMinutes,
+    maxAdvanceDays: params.maxAdvanceDays,
+    bookingWindowStart: params.bookingWindowStart,
+    bookingWindowEnd: params.bookingWindowEnd,
+  });
 
   const inGuestDate = (d: Date) =>
     formatDateInTz(d, params.guestTimezone) === params.date;
@@ -725,6 +733,39 @@ async function computePerUserWindows(params: {
     bufferAfterMinutes: params.bufferAfterMinutes,
     schedulingMode: params.schedulingMode,
   });
+}
+
+function clampToBookingWindow(
+  merged: MergedWindow[],
+  opts: {
+    minNoticeMinutes: number;
+    maxAdvanceDays: number;
+    bookingWindowStart?: string | null;
+    bookingWindowEnd?: string | null;
+  }
+): MergedWindow[] {
+  const now = new Date();
+  const minNotice = addMinutes(now, opts.minNoticeMinutes);
+  let windowEnd = addDays(now, opts.maxAdvanceDays);
+  let absStart: Date | null = null;
+  if (opts.bookingWindowStart) {
+    absStart = new Date(`${opts.bookingWindowStart}T00:00:00Z`);
+  }
+  if (opts.bookingWindowEnd) {
+    const absEnd = new Date(`${opts.bookingWindowEnd}T23:59:59Z`);
+    if (absEnd.getTime() < windowEnd.getTime()) windowEnd = absEnd;
+  }
+  const effectiveStart =
+    absStart && absStart.getTime() > minNotice.getTime() ? absStart : minNotice;
+
+  return merged
+    .map((w) => ({
+      start:
+        w.start.getTime() < effectiveStart.getTime() ? effectiveStart : w.start,
+      end: w.end.getTime() > windowEnd.getTime() ? windowEnd : w.end,
+      userIds: w.userIds,
+    }))
+    .filter((w) => w.start.getTime() < w.end.getTime());
 }
 
 function subtractPeriod(

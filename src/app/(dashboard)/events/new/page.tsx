@@ -63,11 +63,17 @@ export default function NewEventPage() {
       | "all_available"
       | "specific_person",
     slotMode: "fixed_slots" as "fixed_slots" | "flexible_start",
+    calendarTitleFormat: "title_first" as
+      | "title_first"
+      | "company_first"
+      | "company_only",
     color: "#6366f1",
     bufferBeforeMinutes: 0,
     bufferAfterMinutes: 0,
     minNoticeMinutes: 60,
     maxAdvanceDays: 60,
+    bookingWindowStart: "" as string,
+    bookingWindowEnd: "" as string,
   });
 
   function generateSlug(title: string) {
@@ -96,6 +102,8 @@ export default function NewEventPage() {
     try {
       const payload = {
         ...form,
+        bookingWindowStart: form.bookingWindowStart || null,
+        bookingWindowEnd: form.bookingWindowEnd || null,
         ownerUserId: owner && me && owner.id !== me.id ? owner.id : undefined,
         memberUserIds: selectedMembers.map((m) => m.id),
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
@@ -436,9 +444,86 @@ export default function NewEventPage() {
                 }
                 min={1}
                 max={365}
+                disabled={!!(form.bookingWindowStart || form.bookingWindowEnd)}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                今日からこの日数以内のスロットのみ表示されます
+                ※ 下記「予約可能期間」が指定されている場合は無視されます
+              </p>
+            </div>
+            <div className="border-t pt-4 space-y-3">
+              <Label>予約可能期間（絶対日付・任意）</Label>
+              <p className="text-xs text-muted-foreground">
+                セットすると「最大予約可能日数」より優先されます。キックオフ等で「明日から6/26まで」のような期間限定URL用。
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">
+                    開始日
+                  </label>
+                  <Input
+                    type="date"
+                    value={form.bookingWindowStart}
+                    onChange={(e) => {
+                      updateField("bookingWindowStart", e.target.value);
+                      if (
+                        form.bookingWindowEnd &&
+                        form.bookingWindowEnd < e.target.value
+                      )
+                        updateField("bookingWindowEnd", e.target.value);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">
+                    終了日
+                  </label>
+                  <Input
+                    type="date"
+                    value={form.bookingWindowEnd}
+                    min={form.bookingWindowStart || undefined}
+                    onChange={(e) =>
+                      updateField("bookingWindowEnd", e.target.value)
+                    }
+                  />
+                </div>
+              </div>
+              {(form.bookingWindowStart || form.bookingWindowEnd) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    updateField("bookingWindowStart", "");
+                    updateField("bookingWindowEnd", "");
+                  }}
+                >
+                  期間指定をクリア
+                </Button>
+              )}
+            </div>
+            <div className="border-t pt-4">
+              <Label>カレンダーイベントのタイトル形式</Label>
+              <Select
+                value={form.calendarTitleFormat}
+                onValueChange={(v) => updateField("calendarTitleFormat", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="title_first">
+                    イベント名 + 社名/担当者名様
+                  </SelectItem>
+                  <SelectItem value="company_first">
+                    社名/担当者名様 + イベント名
+                  </SelectItem>
+                  <SelectItem value="company_only">
+                    社名 + イベント名
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Googleカレンダー一覧で会社名を頭に出したい場合は「社名/担当者名様 + イベント名」推奨
               </p>
             </div>
           </CardContent>

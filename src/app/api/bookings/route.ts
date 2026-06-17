@@ -17,6 +17,23 @@ import { createZoomMeeting } from "@/lib/zoom";
 import { addMinutes } from "date-fns";
 import { getDateStringInTimezone } from "@/lib/timezone";
 
+function formatCalendarTitle(
+  format: string | null | undefined,
+  eventTitle: string,
+  company: string,
+  guestName: string
+): string {
+  switch (format) {
+    case "company_first":
+      return `${company}/${guestName}様 ${eventTitle}`;
+    case "company_only":
+      return `${company} ${eventTitle}`;
+    case "title_first":
+    default:
+      return `${eventTitle}${company}/${guestName}様`;
+  }
+}
+
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
@@ -148,7 +165,12 @@ export async function POST(req: NextRequest) {
   try {
     if (eventType.meetingPlatform === "zoom") {
       const zoom = await createZoomMeeting({
-        topic: `${eventType.title}${data.guestCompanyName}/${data.guestName}様`,
+        topic: formatCalendarTitle(
+          eventType.calendarTitleFormat,
+          eventType.title,
+          data.guestCompanyName,
+          data.guestName
+        ),
         startTime: startTime.toISOString(),
         durationMinutes: eventType.durationMinutes,
       });
@@ -167,7 +189,12 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join("\n");
 
-    const calendarTitle = `${eventType.title}${data.guestCompanyName}/${data.guestName}様`;
+    const calendarTitle = formatCalendarTitle(
+      eventType.calendarTitleFormat,
+      eventType.title,
+      data.guestCompanyName,
+      data.guestName
+    );
 
     // Only the assigned user gets the calendar event.
     // For any_available, other members are NOT invited as attendees so their

@@ -9,9 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { EmbedDialog } from "@/components/embed-dialog";
 import { getManagedUserIds } from "@/lib/auth-helpers";
 
-export default async function EventsPage() {
+export default async function EventsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ owner?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) return null;
+  const { owner: ownerFilter } = await searchParams;
 
   const [user] = await db
     .select()
@@ -20,10 +25,33 @@ export default async function EventsPage() {
 
   const managedIds = await getManagedUserIds(session.user.id);
 
+  // Fetch profiles for all managed users (for filter dropdown)
+  const allManaged =
+    managedIds.length > 0
+      ? await db
+          .select({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            username: users.username,
+          })
+          .from(users)
+          .where(inArray(users.id, managedIds))
+      : [];
+
+  // Filter event owners by URL ?owner=...
+  // "me" = self (default), "all" = entire managed set, otherwise a specific userId
+  let ownerIdsToShow: string[] = [session.user.id];
+  if (ownerFilter === "all") {
+    ownerIdsToShow = managedIds;
+  } else if (ownerFilter && managedIds.includes(ownerFilter)) {
+    ownerIdsToShow = [ownerFilter];
+  }
+
   const events = await db
     .select()
     .from(eventTypes)
-    .where(inArray(eventTypes.userId, managedIds))
+    .where(inArray(eventTypes.userId, ownerIdsToShow))
     .orderBy(eventTypes.createdAt);
 
   // Look up owner profiles to render "owner" badge
@@ -61,7 +89,7 @@ export default async function EventsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold">イベントタイプ</h1>
           <p className="text-muted-foreground">
@@ -72,6 +100,47 @@ export default async function EventsPage() {
           <Link href="/events/new">新規作成</Link>
         </Button>
       </div>
+
+      {allManaged.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground">表示:</span>
+          <Link
+            href="/events"
+            className={`text-sm px-3 py-1 rounded-md border ${
+              !ownerFilter || ownerFilter === "me"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "hover:bg-muted"
+            }`}
+          >
+            自分のみ
+          </Link>
+          <Link
+            href="/events?owner=all"
+            className={`text-sm px-3 py-1 rounded-md border ${
+              ownerFilter === "all"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "hover:bg-muted"
+            }`}
+          >
+            全員
+          </Link>
+          {allManaged
+            .filter((u) => u.id !== session.user!.id)
+            .map((u) => (
+              <Link
+                key={u.id}
+                href={`/events?owner=${u.id}`}
+                className={`text-sm px-3 py-1 rounded-md border ${
+                  ownerFilter === u.id
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "hover:bg-muted"
+                }`}
+              >
+                {u.name || u.email}
+              </Link>
+            ))}
+        </div>
+      )}
 
       {events.length === 0 ? (
         <Card>

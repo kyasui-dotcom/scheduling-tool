@@ -51,12 +51,15 @@ export default function EditEventPage({
     meetingPlatform: "google_meet" as string,
     schedulingMode: "specific_person" as string,
     slotMode: "fixed_slots" as string,
+    calendarTitleFormat: "title_first" as string,
     color: "#6366f1",
     isActive: true,
     bufferBeforeMinutes: 0,
     bufferAfterMinutes: 0,
     minNoticeMinutes: 60,
     maxAdvanceDays: 60,
+    bookingWindowStart: "" as string,
+    bookingWindowEnd: "" as string,
   });
 
   useEffect(() => {
@@ -73,12 +76,15 @@ export default function EditEventPage({
             meetingPlatform: data.meetingPlatform || "google_meet",
             schedulingMode: data.schedulingMode || "specific_person",
             slotMode: data.slotMode || "fixed_slots",
+            calendarTitleFormat: data.calendarTitleFormat || "title_first",
             color: data.color || "#6366f1",
             isActive: data.isActive ?? true,
             bufferBeforeMinutes: data.bufferBeforeMinutes || 0,
             bufferAfterMinutes: data.bufferAfterMinutes || 0,
             minNoticeMinutes: data.minNoticeMinutes || 60,
             maxAdvanceDays: data.maxAdvanceDays || 60,
+            bookingWindowStart: data.bookingWindowStart || "",
+            bookingWindowEnd: data.bookingWindowEnd || "",
           });
 
           // Store the owner user id and custom questions
@@ -130,6 +136,8 @@ export default function EditEventPage({
     try {
       const payload = {
         ...form,
+        bookingWindowStart: form.bookingWindowStart || null,
+        bookingWindowEnd: form.bookingWindowEnd || null,
         memberUserIds: selectedMembers.map((m) => m.id),
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
       };
@@ -482,7 +490,87 @@ export default function EditEventPage({
                 }
                 min={1}
                 max={365}
+                disabled={!!(form.bookingWindowStart || form.bookingWindowEnd)}
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                ※ 下記「予約可能期間」が指定されている場合は無視されます
+              </p>
+            </div>
+            <div className="border-t pt-4 space-y-3">
+              <Label>予約可能期間（絶対日付・任意）</Label>
+              <p className="text-xs text-muted-foreground">
+                セットすると「最大予約可能日数」より優先されます。キックオフなど特定期間限定のURL用。
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">
+                    開始日
+                  </label>
+                  <Input
+                    type="date"
+                    value={form.bookingWindowStart}
+                    onChange={(e) => {
+                      updateField("bookingWindowStart", e.target.value);
+                      if (
+                        form.bookingWindowEnd &&
+                        form.bookingWindowEnd < e.target.value
+                      )
+                        updateField("bookingWindowEnd", e.target.value);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">
+                    終了日
+                  </label>
+                  <Input
+                    type="date"
+                    value={form.bookingWindowEnd}
+                    min={form.bookingWindowStart || undefined}
+                    onChange={(e) =>
+                      updateField("bookingWindowEnd", e.target.value)
+                    }
+                  />
+                </div>
+              </div>
+              {(form.bookingWindowStart || form.bookingWindowEnd) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    updateField("bookingWindowStart", "");
+                    updateField("bookingWindowEnd", "");
+                  }}
+                >
+                  期間指定をクリア（相対日数に戻す）
+                </Button>
+              )}
+            </div>
+            <div className="border-t pt-4">
+              <Label>カレンダーイベントのタイトル形式</Label>
+              <Select
+                value={form.calendarTitleFormat}
+                onValueChange={(v) => updateField("calendarTitleFormat", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="title_first">
+                    イベント名 + 社名/担当者名様 （例: 30分商談株式会社A/山田太郎様）
+                  </SelectItem>
+                  <SelectItem value="company_first">
+                    社名/担当者名様 + イベント名 （例: 株式会社A/山田太郎様 30分商談）
+                  </SelectItem>
+                  <SelectItem value="company_only">
+                    社名 + イベント名 （例: 株式会社A 30分商談）
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Googleカレンダー一覧で会社名を頭に出したい場合は「社名/担当者名様 + イベント名」を選択してください
+              </p>
             </div>
           </CardContent>
         </Card>

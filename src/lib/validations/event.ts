@@ -42,6 +42,19 @@ export const createEventTypeSchema = z.object({
   bufferAfterMinutes: z.number().int().min(0).max(120).optional(),
   minNoticeMinutes: z.number().int().min(0).optional(),
   maxAdvanceDays: z.number().int().min(1).max(365).optional(),
+  bookingWindowStart: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  bookingWindowEnd: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  calendarTitleFormat: z
+    .enum(["title_first", "company_first", "company_only"])
+    .optional(),
   ownerUserId: z.string().optional(),
   memberUserIds: z.array(z.string()).optional(),
   customQuestions: z.array(customQuestionSchema).optional(),
