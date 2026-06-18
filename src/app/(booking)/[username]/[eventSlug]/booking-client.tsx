@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { format, addMonths, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isBefore, startOfDay } from "date-fns";
+import { format, addMonths, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isBefore, isAfter, startOfDay, endOfDay, differenceInCalendarDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +16,10 @@ interface Props {
     durationMinutes: number;
     color: string | null;
     slotMode: "fixed_slots" | "flexible_start";
+    bookingWindowStart: string | null;
+    bookingWindowEnd: string | null;
+    maxAdvanceDays: number;
+    minNoticeMinutes: number;
   };
   organizer: {
     name: string;
@@ -41,12 +45,34 @@ interface DayData {
   windows: FlexibleWindow[];
 }
 
-const PHASE1_DAYS = 2;   // today + tomorrow on first paint
-const PHASE2_DAYS = 12;  // background prefetch of the rest
-
 export function BookingClient({ eventType, organizer }: Props) {
   const router = useRouter();
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  // Compute the bookable window once from props
+  const bookableWindow = useMemo(() => {
+    const now = new Date();
+    const minNoticeMs = (eventType.minNoticeMinutes || 0) * 60 * 1000;
+    let earliest = new Date(now.getTime() + minNoticeMs);
+    let latest = addDays(now, eventType.maxAdvanceDays || 60);
+    if (eventType.bookingWindowStart) {
+      const wStart = startOfDay(new Date(`${eventType.bookingWindowStart}T00:00:00`));
+      if (wStart.getTime() > earliest.getTime()) earliest = wStart;
+    }
+    if (eventType.bookingWindowEnd) {
+      const wEnd = endOfDay(new Date(`${eventType.bookingWindowEnd}T00:00:00`));
+      if (wEnd.getTime() < latest.getTime()) latest = wEnd;
+    }
+    return { earliest, latest };
+  }, [
+    eventType.bookingWindowStart,
+    eventType.bookingWindowEnd,
+    eventType.maxAdvanceDays,
+    eventType.minNoticeMinutes,
+  ]);
+
+  // Initial month = the month containing the earliest bookable day
+  const [currentMonth, setCurrentMonth] = useState(() =>
+    startOfMonth(bookableWindow.earliest)
+  );
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [cache, setCache] = useState<Map<string, DayData>>(new Map());
   const [loadingDates, setLoadingDates] = useState<Set<string>>(new Set());
@@ -110,20 +136,26 @@ export function BookingClient({ eventType, organizer }: Props) {
     [eventType.id, timezone, cache]
   );
 
-  // Phase 1: immediate prefetch today + tomorrow
-  // Phase 2: background prefetch the next 12 days
+  // Prefetch the bookable portion of the currently displayed month whenever
+  // the user navigates months. Clamped to bookable window so we never query
+  // dates that are definitively unbookable.
   useEffect(() => {
     if (!timezone) return;
-    const today = format(new Date(), "yyyy-MM-dd");
-    fetchDays(today, PHASE1_DAYS);
-    const t = setTimeout(() => {
-      const start = format(addDays(new Date(), PHASE1_DAYS), "yyyy-MM-dd");
-      fetchDays(start, PHASE2_DAYS);
-    }, 80);
-    return () => clearTimeout(t);
-    // intentionally only on mount + timezone resolution
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timezone, eventType.id]);
+    const monthStart = startOfMonth(currentMonth);
+    const monthEnd = endOfMonth(currentMonth);
+    const start =
+      monthStart.getTime() < bookableWindow.earliest.getTime()
+        ? startOfDay(bookableWindow.earliest)
+        : monthStart;
+    const end =
+      monthEnd.getTime() > bookableWindow.latest.getTime()
+        ? bookableWindow.latest
+        : monthEnd;
+    if (end.getTime() < start.getTime()) return;
+    const days = Math.min(differenceInCalendarDays(end, start) + 1, 31);
+    if (days <= 0) return;
+    fetchDays(format(start, "yyyy-MM-dd"), days);
+  }, [currentMonth, timezone, bookableWindow, fetchDays]);
 
   // When user selects a date: fetch immediately if not cached (jumps the queue)
   useEffect(() => {
@@ -208,7 +240,7 @@ export function BookingClient({ eventType, organizer }: Props) {
                   onClick={() => setCurrentMonth(addMonths(currentMonth, -1))}
                   disabled={isBefore(
                     endOfMonth(addMonths(currentMonth, -1)),
-                    startOfDay(new Date())
+                    bookableWindow.earliest
                   )}
                 >
                   &lt;
@@ -220,6 +252,10 @@ export function BookingClient({ eventType, organizer }: Props) {
                   variant="ghost"
                   size="sm"
                   onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                  disabled={isAfter(
+                    startOfMonth(addMonths(currentMonth, 1)),
+                    bookableWindow.latest
+                  )}
                 >
                   &gt;
                 </Button>
@@ -242,6 +278,10 @@ export function BookingClient({ eventType, organizer }: Props) {
                 ))}
                 {days.map((day) => {
                   const isPast = isBefore(day, startOfDay(new Date()));
+                  // Out of booking window — known unbookable without server check
+                  const isOutsideWindow =
+                    isBefore(endOfDay(day), bookableWindow.earliest) ||
+                    isAfter(startOfDay(day), bookableWindow.latest);
                   const isSelected =
                     selectedDate &&
                     format(day, "yyyy-MM-dd") ===
@@ -255,28 +295,36 @@ export function BookingClient({ eventType, organizer }: Props) {
                       : cached.windows.length
                     : null;
                   const isCachedEmpty = cached !== undefined && cachedCount === 0;
+                  const isDisabled = isPast || isOutsideWindow || isCachedEmpty;
                   return (
                     <button
                       key={day.toISOString()}
                       className={`
                         relative aspect-square flex items-center justify-center rounded-md text-sm
                         transition-colors
-                        ${isPast ? "text-muted-foreground/50 cursor-not-allowed" : "hover:bg-primary/10 cursor-pointer"}
-                        ${isCachedEmpty && !isPast ? "text-muted-foreground/40" : ""}
+                        ${isDisabled ? "text-muted-foreground/40 cursor-not-allowed" : "hover:bg-primary/10 cursor-pointer"}
                         ${isSelected ? "bg-primary text-primary-foreground hover:bg-primary" : ""}
                         ${isToday(day) && !isSelected ? "border border-primary" : ""}
                       `}
-                      disabled={isPast}
+                      disabled={isDisabled}
                       title={
-                        cached
+                        isOutsideWindow
+                          ? "予約可能期間外"
+                          : isPast
+                          ? "過去の日付"
+                          : cached
                           ? `空き ${cachedCount} ${eventType.slotMode === "fixed_slots" ? "スロット" : "時間帯"}`
                           : isPrefetching
                           ? "読み込み中..."
                           : undefined
                       }
                       onMouseEnter={() => {
-                        // Prefetch on hover if not cached
-                        if (!isPast && !cache.has(dayKey) && !inFlightRef.current.has(dayKey)) {
+                        // Prefetch on hover if inside window, not cached, not in flight
+                        if (
+                          !isDisabled &&
+                          !cache.has(dayKey) &&
+                          !inFlightRef.current.has(dayKey)
+                        ) {
                           fetchDays(dayKey, 1);
                         }
                       }}

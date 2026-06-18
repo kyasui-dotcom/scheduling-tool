@@ -40,6 +40,10 @@ export default async function BookingPage({
         durationMinutes: eventType.durationMinutes,
         color: eventType.color,
         slotMode: eventType.slotMode ?? "fixed_slots",
+        bookingWindowStart: eventType.bookingWindowStart,
+        bookingWindowEnd: eventType.bookingWindowEnd,
+        maxAdvanceDays: eventType.maxAdvanceDays ?? 60,
+        minNoticeMinutes: eventType.minNoticeMinutes ?? 0,
       }}
       organizer={{
         name: user.name || username,
