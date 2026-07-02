@@ -4,6 +4,7 @@ import { bookings, eventTypes, users } from "@/lib/db/schema";
 import { and, eq, inArray, gte, lte, desc, count } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Fragment } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getManagedUserIds } from "@/lib/auth-helpers";
@@ -107,6 +108,29 @@ export default async function BookingsAdminPage({
       timeZone: "Asia/Tokyo",
       hour12: false,
     }).format(d);
+
+  // Format guest custom-question answers as "Q: A / Q: A"
+  const formatAnswers = (
+    guestAnswers: unknown,
+    customQuestions: unknown
+  ): { question: string; answer: string }[] => {
+    if (!Array.isArray(guestAnswers) || !Array.isArray(customQuestions)) {
+      return [];
+    }
+    const qMap = new Map<string, string>();
+    for (const q of customQuestions as Array<{ id: string; question: string }>) {
+      if (q?.id) qMap.set(q.id, q.question);
+    }
+    return (
+      guestAnswers as Array<{ questionId: string; answer: string | string[] }>
+    )
+      .map((a) => {
+        const q = qMap.get(a.questionId) || "(質問)";
+        const ans = Array.isArray(a.answer) ? a.answer.join(", ") : a.answer;
+        return { question: q, answer: String(ans) };
+      })
+      .filter((a) => a.answer.length > 0);
+  };
 
   const buildLink = (patch: Partial<SearchParams>) => {
     const p = new URLSearchParams();
@@ -280,8 +304,14 @@ export default async function BookingsAdminPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(({ booking, eventType, assignee }) => (
-                    <tr key={booking.id} className="border-t hover:bg-muted/30">
+                  {rows.map(({ booking, eventType, assignee }) => {
+                    const answers = formatAnswers(
+                      booking.guestAnswers,
+                      eventType.customQuestions
+                    );
+                    return (
+                      <Fragment key={booking.id}>
+                    <tr className="border-t hover:bg-muted/30">
                       <td className="px-4 py-2 whitespace-nowrap font-mono text-xs text-muted-foreground">
                         {fmt(booking.createdAt)}
                       </td>
@@ -344,7 +374,31 @@ export default async function BookingsAdminPage({
                         )}
                       </td>
                     </tr>
-                  ))}
+                    {answers.length > 0 && (
+                      <tr className="bg-muted/10">
+                        <td colSpan={7} className="px-4 py-2 text-xs">
+                          <div className="text-muted-foreground text-[10px] mb-1">
+                            カスタム質問の回答
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+                            {answers.map((a, i) => (
+                              <div
+                                key={i}
+                                className="flex gap-2 leading-tight"
+                              >
+                                <span className="text-muted-foreground shrink-0">
+                                  {a.question}:
+                                </span>
+                                <span className="break-all">{a.answer}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

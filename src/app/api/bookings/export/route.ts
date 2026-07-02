@@ -91,6 +91,7 @@ export async function GET(req: NextRequest) {
     "キャンセル理由",
     "顧客メモ",
     "顧客タイムゾーン",
+    "カスタム質問回答",
   ];
 
   const csvLines: string[] = [header.map(csvEscape).join(",")];
@@ -110,6 +111,35 @@ export async function GET(req: NextRequest) {
     const durationMin = Math.round(
       (booking.endTime.getTime() - booking.startTime.getTime()) / 60000
     );
+
+    // Join custom question answers as "Q: A | Q: A"
+    let answersText = "";
+    if (
+      Array.isArray(booking.guestAnswers) &&
+      Array.isArray(eventType.customQuestions)
+    ) {
+      const qMap = new Map<string, string>();
+      for (const q of eventType.customQuestions as Array<{
+        id: string;
+        question: string;
+      }>) {
+        if (q?.id) qMap.set(q.id, q.question);
+      }
+      answersText = (
+        booking.guestAnswers as Array<{
+          questionId: string;
+          answer: string | string[];
+        }>
+      )
+        .map((a) => {
+          const q = qMap.get(a.questionId) || "(質問)";
+          const ans = Array.isArray(a.answer) ? a.answer.join(", ") : a.answer;
+          return `${q}: ${ans}`;
+        })
+        .filter((s) => s.length > 0)
+        .join(" | ");
+    }
+
     csvLines.push(
       [
         csvEscape(fmtJst(booking.createdAt)),
@@ -129,6 +159,7 @@ export async function GET(req: NextRequest) {
         csvEscape(booking.cancellationReason || ""),
         csvEscape(booking.guestNotes || ""),
         csvEscape(booking.guestTimezone),
+        csvEscape(answersText),
       ].join(",")
     );
   }
