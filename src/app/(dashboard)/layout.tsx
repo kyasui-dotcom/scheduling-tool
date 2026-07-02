@@ -35,6 +35,12 @@ export default async function DashboardLayout({
                 イベントタイプ
               </Link>
               <Link
+                href="/bookings"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                予約管理
+              </Link>
+              <Link
                 href="/availability"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
