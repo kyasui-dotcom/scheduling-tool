@@ -268,7 +268,10 @@ export default async function BookingsAdminPage({
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 text-xs">
                   <tr>
-                    <th className="text-left px-4 py-2 font-medium">日時</th>
+                    <th className="text-left px-4 py-2 font-medium">
+                      予約日時
+                    </th>
+                    <th className="text-left px-4 py-2 font-medium">開始日時</th>
                     <th className="text-left px-4 py-2 font-medium">担当</th>
                     <th className="text-left px-4 py-2 font-medium">顧客</th>
                     <th className="text-left px-4 py-2 font-medium">イベント</th>
@@ -279,6 +282,9 @@ export default async function BookingsAdminPage({
                 <tbody>
                   {rows.map(({ booking, eventType, assignee }) => (
                     <tr key={booking.id} className="border-t hover:bg-muted/30">
+                      <td className="px-4 py-2 whitespace-nowrap font-mono text-xs text-muted-foreground">
+                        {fmt(booking.createdAt)}
+                      </td>
                       <td className="px-4 py-2 whitespace-nowrap font-mono text-xs">
                         {fmt(booking.startTime)}
                         <br />
