@@ -272,12 +272,33 @@ export default function EditEventPage({
             </div>
             <div>
               <Label htmlFor="slug">URL スラッグ</Label>
-              <Input
-                id="slug"
-                value={form.slug}
-                onChange={(e) => updateField("slug", e.target.value)}
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="slug"
+                  value={form.slug}
+                  onChange={(e) => updateField("slug", e.target.value)}
+                  required
+                  className="font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+                    const arr = new Uint8Array(10);
+                    crypto.getRandomValues(arr);
+                    updateField(
+                      "slug",
+                      Array.from(arr, (b) => chars[b % chars.length]).join("")
+                    );
+                  }}
+                >
+                  再生成
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                変更すると既存の公開URLは無効になります
+              </p>
             </div>
             <div>
               <Label htmlFor="description">説明</Label>

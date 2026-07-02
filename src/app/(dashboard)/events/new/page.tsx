@@ -51,6 +51,8 @@ export default function NewEventPage() {
       .then((r) => (r.ok ? r.json() : []))
       .then((arr) => setSameDomainUsers(arr || []))
       .catch(() => {});
+    // Generate a random URL slug on mount so URLs are unguessable
+    setForm((prev) => ({ ...prev, slug: generateRandomSlug() }));
   }, []);
   const [form, setForm] = useState({
     title: "",
@@ -73,23 +75,15 @@ export default function NewEventPage() {
     bookingWindowEnd: "" as string,
   });
 
-  function generateSlug(title: string) {
-    return title
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
+  function generateRandomSlug(length = 10): string {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    const arr = new Uint8Array(length);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, (b) => chars[b % chars.length]).join("");
   }
 
   function updateField(field: string, value: string | number) {
-    setForm((prev) => {
-      const updated = { ...prev, [field]: value };
-      if (field === "title") {
-        updated.slug = generateSlug(value as string);
-      }
-      return updated;
-    });
+    setForm((prev) => ({ ...prev, [field]: value }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -218,15 +212,25 @@ export default function NewEventPage() {
             </div>
             <div>
               <Label htmlFor="slug">URL スラッグ</Label>
-              <Input
-                id="slug"
-                value={form.slug}
-                onChange={(e) => updateField("slug", e.target.value)}
-                placeholder="例: 30min-meeting"
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="slug"
+                  value={form.slug}
+                  onChange={(e) => updateField("slug", e.target.value)}
+                  placeholder="例: a1b2c3d4e5"
+                  required
+                  className="font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => updateField("slug", generateRandomSlug())}
+                >
+                  再生成
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground mt-1">
-                URLの一部として使用されます（英数字とハイフンのみ）
+                URLの一部として使用されます（英数字とハイフンのみ）。デフォルトで10文字の乱数が生成されます。
               </p>
             </div>
             <div>
