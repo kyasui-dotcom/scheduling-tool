@@ -223,6 +223,13 @@ export default async function BookingsAdminPage({
           <CardTitle className="text-base">
             予約一覧 ({rows.length}件{rows.length === 200 && " / 200件で表示上限"})
           </CardTitle>
+          <a
+            href={`/api/bookings/export${buildLink({}).replace("/bookings", "")}`}
+            className="text-sm px-3 py-1.5 rounded-md border hover:bg-muted"
+            download
+          >
+            CSV エクスポート
+          </a>
         </CardHeader>
         <CardContent className="p-0">
           {rows.length === 0 ? (
