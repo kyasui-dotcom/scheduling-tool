@@ -138,6 +138,44 @@ export default function NewEventPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
           <CardHeader>
+            <CardTitle className="text-base">スケジューリング方式</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div>
+              <Label>予約可能なメンバー構成</Label>
+              <Select
+                value={form.schedulingMode}
+                onValueChange={(v) => updateField("schedulingMode", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="specific_person">
+                    指定メンバーの空き時間（1人）
+                  </SelectItem>
+                  <SelectItem value="any_available">
+                    誰かが空いていればOK（複数名）
+                  </SelectItem>
+                  <SelectItem value="all_available">
+                    全員空いている時のみ（複数名）
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {form.schedulingMode === "specific_person" &&
+                  "オーナーの空き時間だけを先方に提示します（1人用）。複数名で運用するには他のモードを選択してください。"}
+                {form.schedulingMode === "any_available" &&
+                  "メンバーの誰か1人でも空いていれば選択可能。予約時に自動割り当て。"}
+                {form.schedulingMode === "all_available" &&
+                  "全メンバーが空いている時間のみ選択可能。"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-base">基本情報</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -296,36 +334,6 @@ export default function NewEventPage() {
                   `${form.durationMinutes}分刻みの固定スロットから先方が選択します`}
                 {form.slotMode === "flexible_start" &&
                   "空き時間帯の中から先方が15分刻みで開始時刻を選択します（所要時間ぶん予約）"}
-              </p>
-            </div>
-            <div>
-              <Label>スケジューリングモード</Label>
-              <Select
-                value={form.schedulingMode}
-                onValueChange={(v) => updateField("schedulingMode", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="specific_person">
-                    指定メンバーの空き時間
-                  </SelectItem>
-                  <SelectItem value="any_available">
-                    誰かが空いていればOK
-                  </SelectItem>
-                  <SelectItem value="all_available">
-                    全員空いている時のみ
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                {form.schedulingMode === "specific_person" &&
-                  "あなたの空き時間だけを先方に提示します（1人用）"}
-                {form.schedulingMode === "any_available" &&
-                  "メンバーの誰か1人でも空いていれば選択可能。予約時に自動割り当て。"}
-                {form.schedulingMode === "all_available" &&
-                  "全メンバーが空いている時間のみ選択可能。"}
               </p>
             </div>
           </CardContent>
