@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { bookings, eventTypes, users } from "@/lib/db/schema";
-import { and, eq, inArray, gte, lte, desc } from "drizzle-orm";
+import { and, eq, inArray, gte, lte, desc, count } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,10 @@ interface SearchParams {
   status?: string;   // "confirmed" | "cancelled" | "all"
   from?: string;     // YYYY-MM-DD
   to?: string;       // YYYY-MM-DD
+  page?: string;     // 1-indexed page number
 }
+
+const PAGE_SIZE = 50;
 
 export default async function BookingsAdminPage({
   searchParams,
@@ -29,6 +32,7 @@ export default async function BookingsAdminPage({
   const status = sp.status || "confirmed";
   const from = sp.from || "";
   const to = sp.to || "";
+  const page = Math.max(1, parseInt(sp.page || "1", 10) || 1);
 
   const managedIds = await getManagedUserIds(session.user.id);
   const scopedAssigneeIds = scope === "me" ? [session.user.id] : managedIds;
@@ -68,6 +72,17 @@ export default async function BookingsAdminPage({
     conds.push(lte(bookings.startTime, new Date(`${to}T23:59:59`)));
   }
 
+  // Total count for pagination
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(bookings)
+    .innerJoin(eventTypes, eq(bookings.eventTypeId, eventTypes.id))
+    .where(and(...conds));
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const offset = (currentPage - 1) * PAGE_SIZE;
+
   const rows = await db
     .select({
       booking: bookings,
@@ -79,7 +94,8 @@ export default async function BookingsAdminPage({
     .leftJoin(users, eq(bookings.assignedUserId, users.id))
     .where(and(...conds))
     .orderBy(desc(bookings.startTime))
-    .limit(200);
+    .limit(PAGE_SIZE)
+    .offset(offset);
 
   const fmt = (d: Date) =>
     new Intl.DateTimeFormat("ja-JP", {
@@ -94,13 +110,24 @@ export default async function BookingsAdminPage({
 
   const buildLink = (patch: Partial<SearchParams>) => {
     const p = new URLSearchParams();
-    const merged = { scope, status, from, to, assignee: sp.assignee, ...patch };
+    const merged = {
+      scope,
+      status,
+      from,
+      to,
+      assignee: sp.assignee,
+      page: currentPage > 1 ? String(currentPage) : undefined,
+      ...patch,
+    };
     Object.entries(merged).forEach(([k, v]) => {
       if (v) p.set(k, String(v));
     });
     const s = p.toString();
     return s ? `/bookings?${s}` : "/bookings";
   };
+
+  const rangeStart = total === 0 ? 0 : offset + 1;
+  const rangeEnd = offset + rows.length;
 
   return (
     <div className="space-y-6">
@@ -221,7 +248,7 @@ export default async function BookingsAdminPage({
       <Card>
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-base">
-            予約一覧 ({rows.length}件{rows.length === 200 && " / 200件で表示上限"})
+            予約一覧 ({total > 0 ? `${rangeStart}〜${rangeEnd} / ${total}件` : "0件"})
           </CardTitle>
           <a
             href={`/api/bookings/export${buildLink({}).replace("/bookings", "")}`}
@@ -316,8 +343,91 @@ export default async function BookingsAdminPage({
               </table>
             </div>
           )}
+
+          {total > PAGE_SIZE && (
+            <div className="flex items-center justify-between border-t px-4 py-3 flex-wrap gap-2">
+              <p className="text-xs text-muted-foreground">
+                {currentPage} / {totalPages} ページ
+              </p>
+              <div className="flex items-center gap-1">
+                <PagerLink
+                  href={buildLink({ page: "1" })}
+                  disabled={currentPage <= 1}
+                  label="«"
+                />
+                <PagerLink
+                  href={buildLink({ page: String(currentPage - 1) })}
+                  disabled={currentPage <= 1}
+                  label="‹ 前へ"
+                />
+                {getPageWindow(currentPage, totalPages).map((n) => (
+                  <PagerLink
+                    key={n}
+                    href={buildLink({ page: String(n) })}
+                    active={n === currentPage}
+                    label={String(n)}
+                  />
+                ))}
+                <PagerLink
+                  href={buildLink({ page: String(currentPage + 1) })}
+                  disabled={currentPage >= totalPages}
+                  label="次へ ›"
+                />
+                <PagerLink
+                  href={buildLink({ page: String(totalPages) })}
+                  disabled={currentPage >= totalPages}
+                  label="»"
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
+}
+
+function PagerLink({
+  href,
+  label,
+  active,
+  disabled,
+}: {
+  href: string;
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  if (disabled) {
+    return (
+      <span className="text-xs px-2.5 py-1 rounded-md border text-muted-foreground/50 cursor-not-allowed">
+        {label}
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={href}
+      className={`text-xs px-2.5 py-1 rounded-md border ${
+        active
+          ? "bg-primary text-primary-foreground border-primary"
+          : "hover:bg-muted"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
+// Returns up to 5 page numbers centered around currentPage
+function getPageWindow(currentPage: number, totalPages: number): number[] {
+  const width = 5;
+  if (totalPages <= width) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  const half = Math.floor(width / 2);
+  let start = Math.max(1, currentPage - half);
+  const end = Math.min(totalPages, start + width - 1);
+  if (end - start + 1 < width) start = end - width + 1;
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
 }
