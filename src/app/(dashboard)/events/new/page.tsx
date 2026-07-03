@@ -595,11 +595,11 @@ export default function NewEventPage() {
                   予約日時 / 開始 / 終了 / イベント名 / 社名 / 担当者名 /
                   メール / 顧客メモ / カスタム質問回答 / 会議URL
                 </p>
-                <p className="text-amber-700">
-                  ※ 初回利用時は再サインインが必要です（スプレッドシート書き込み権限を追加取得するため）
+                <p className="text-amber-700 font-medium">
+                  ※ 対象のスプレッドシートに <span className="font-mono">k.yasui@raksul.com</span> を編集者として招待してください
                 </p>
                 <p>
-                  ※ 対象のスプレッドシートは主催者(担当者)の Google アカウントで編集可能である必要があります
+                  書き込みは上記アカウントで実行されます（担当者側の権限は不要）
                 </p>
               </div>
             </div>

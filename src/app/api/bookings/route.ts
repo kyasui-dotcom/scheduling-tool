@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { bookings, eventTypes } from "@/lib/db/schema";
+import { bookings, eventTypes, users } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
+
+const SHEETS_WRITER_EMAIL =
+  process.env.SHEETS_WRITER_EMAIL || "k.yasui@raksul.com";
 import { createBookingSchema } from "@/lib/validations/booking";
 import {
   getAvailability,
@@ -275,8 +278,24 @@ export async function POST(req: NextRequest) {
 
   // Optional: append to a Google Sheets URL configured on the event type.
   // Non-blocking — failure is logged but the booking still succeeds.
+  // Writes as a fixed writer account (SHEETS_WRITER_EMAIL). The organizer must
+  // invite this account as an editor on the target spreadsheet.
   if (eventType.spreadsheetUrl) {
     try {
+      const [writer] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, SHEETS_WRITER_EMAIL));
+      if (!writer) {
+        console.error(
+          "[sheets append] writer user not found:",
+          SHEETS_WRITER_EMAIL
+        );
+        throw new Error(
+          `Sheets writer (${SHEETS_WRITER_EMAIL}) is not signed up in this app`
+        );
+      }
+      const writerUserId = writer.id;
       const answersText = (() => {
         if (
           !Array.isArray(data.guestAnswers) ||
@@ -314,7 +333,7 @@ export async function POST(req: NextRequest) {
           .replace(/\//g, "-");
 
       await appendRowToSheet({
-        userId: assignedUserId,
+        userId: writerUserId,
         spreadsheetUrl: eventType.spreadsheetUrl,
         values: [
           fmtJst(booking.createdAt),
