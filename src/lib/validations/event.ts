@@ -71,6 +71,15 @@ export const createEventTypeSchema = z.object({
     )
     .nullable()
     .optional(),
+  spreadsheetUrl: z
+    .string()
+    .url()
+    .refine((s) => /docs\.google\.com\/spreadsheets\/d\//.test(s), {
+      message: "Google Sheets の URL を指定してください",
+    })
+    .nullable()
+    .optional()
+    .or(z.literal("")),
   ownerUserId: z.string().optional(),
   memberUserIds: z.array(z.string()).optional(),
   customQuestions: z.array(customQuestionSchema).optional(),

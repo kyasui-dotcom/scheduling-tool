@@ -13,6 +13,7 @@ import {
   createCalendarEvent,
   getMultiUserFreeBusy,
 } from "@/lib/google-calendar";
+import { appendRowToSheet } from "@/lib/google-sheets";
 import { createZoomMeeting } from "@/lib/zoom";
 import { addMinutes } from "date-fns";
 import { getDateStringInTimezone } from "@/lib/timezone";
@@ -271,6 +272,68 @@ export async function POST(req: NextRequest) {
       googleCalendarEventId,
     })
     .returning();
+
+  // Optional: append to a Google Sheets URL configured on the event type.
+  // Non-blocking — failure is logged but the booking still succeeds.
+  if (eventType.spreadsheetUrl) {
+    try {
+      const answersText = (() => {
+        if (
+          !Array.isArray(data.guestAnswers) ||
+          !Array.isArray(eventType.customQuestions)
+        ) {
+          return "";
+        }
+        const qMap = new Map<string, string>();
+        for (const q of eventType.customQuestions as Array<{
+          id: string;
+          question: string;
+        }>) {
+          if (q?.id) qMap.set(q.id, q.question);
+        }
+        return data.guestAnswers
+          .map((a) => {
+            const q = qMap.get(a.questionId) || "(質問)";
+            const ans = Array.isArray(a.answer) ? a.answer.join(", ") : a.answer;
+            return `${q}: ${ans}`;
+          })
+          .join(" | ");
+      })();
+
+      const fmtJst = (d: Date) =>
+        new Intl.DateTimeFormat("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Asia/Tokyo",
+          hour12: false,
+        })
+          .format(d)
+          .replace(/\//g, "-");
+
+      await appendRowToSheet({
+        userId: assignedUserId,
+        spreadsheetUrl: eventType.spreadsheetUrl,
+        values: [
+          fmtJst(booking.createdAt),
+          fmtJst(booking.startTime),
+          fmtJst(booking.endTime),
+          eventType.title,
+          data.guestCompanyName,
+          data.guestName,
+          data.guestEmail,
+          data.guestNotes || "",
+          answersText,
+          meetingUrl || "",
+        ],
+      });
+    } catch (err) {
+      console.error("[sheets append] failed:", err);
+      // Do not fail the booking — sheets is optional.
+    }
+  }
 
   return NextResponse.json(booking, { status: 201 });
 }

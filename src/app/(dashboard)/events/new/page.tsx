@@ -78,6 +78,7 @@ export default function NewEventPage() {
     maxAdvanceDays: 60,
     bookingWindowStart: "" as string,
     bookingWindowEnd: "" as string,
+    spreadsheetUrl: "" as string,
   });
 
   function generateRandomSlug(length = 10): string {
@@ -100,6 +101,7 @@ export default function NewEventPage() {
         ...form,
         bookingWindowStart: form.bookingWindowStart || null,
         bookingWindowEnd: form.bookingWindowEnd || null,
+        spreadsheetUrl: form.spreadsheetUrl || null,
         ownerUserId: owner && me && owner.id !== me.id ? owner.id : undefined,
         memberUserIds: selectedMembers.map((m) => m.id),
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
@@ -561,6 +563,43 @@ export default function NewEventPage() {
                       .replaceAll("{company}", "株式会社A")
                       .replaceAll("{name}", "山田太郎")}
                   </span>
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">外部連携</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div>
+              <Label htmlFor="spreadsheetUrl">
+                Google スプレッドシート URL
+              </Label>
+              <Input
+                id="spreadsheetUrl"
+                type="url"
+                value={form.spreadsheetUrl}
+                onChange={(e) =>
+                  updateField("spreadsheetUrl", e.target.value)
+                }
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+              />
+              <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                <p>
+                  設定すると予約が入るたびに 1行追加されます。列順:
+                </p>
+                <p className="font-mono">
+                  予約日時 / 開始 / 終了 / イベント名 / 社名 / 担当者名 /
+                  メール / 顧客メモ / カスタム質問回答 / 会議URL
+                </p>
+                <p className="text-amber-700">
+                  ※ 初回利用時は再サインインが必要です（スプレッドシート書き込み権限を追加取得するため）
+                </p>
+                <p>
+                  ※ 対象のスプレッドシートは主催者(担当者)の Google アカウントで編集可能である必要があります
                 </p>
               </div>
             </div>

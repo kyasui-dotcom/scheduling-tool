@@ -155,6 +155,7 @@ export const eventTypes = pgTable(
         endTime: string; // HH:MM
       }>
     >(),
+    spreadsheetUrl: text("spreadsheet_url"),
     customQuestions: jsonb("custom_questions").$type<
       Array<{
         id: string;
