@@ -33,6 +33,17 @@ interface Member {
   username: string | null;
 }
 
+interface EventExportTask {
+  id: string;
+  name: string;
+  spreadsheetUrl: string;
+  eventTypeId: string | null;
+  lastRunAt: string | null;
+  lastRunStatus: string | null;
+  lastRunRowCount: number | null;
+  lastRunError: string | null;
+}
+
 export default function EditEventPage({
   params,
 }: {
@@ -48,6 +59,8 @@ export default function EditEventPage({
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
   const [businessHours, setBusinessHours] = useState<BusinessHour[] | null>(null);
+  const [exportTasks, setExportTasks] = useState<EventExportTask[]>([]);
+  const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: "",
     slug: "",
@@ -142,6 +155,52 @@ export default function EditEventPage({
     }
     load();
   }, [eventId]);
+
+  const loadExportTasks = async () => {
+    try {
+      const res = await fetch("/api/exports");
+      if (res.ok) {
+        const arr: EventExportTask[] = await res.json();
+        setExportTasks(arr.filter((t) => t.eventTypeId === eventId));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    loadExportTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
+  async function runExportTask(id: string) {
+    setRunningTaskId(id);
+    try {
+      const res = await fetch(`/api/exports/${id}/run`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`${data.appended}件をシートに追記しました`);
+      } else {
+        toast.error(data.error || "実行に失敗しました");
+      }
+      await loadExportTasks();
+    } catch {
+      toast.error("実行に失敗しました");
+    } finally {
+      setRunningTaskId(null);
+    }
+  }
+
+  async function deleteExportTask(id: string) {
+    if (!confirm("この排出タスクを削除しますか？")) return;
+    const res = await fetch(`/api/exports/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("削除しました");
+      await loadExportTasks();
+    } else {
+      toast.error("削除に失敗しました");
+    }
+  }
 
   function updateField(field: string, value: string | number | boolean) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -680,6 +739,111 @@ export default function EditEventPage({
                 </p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base">
+                このイベントの排出タスク
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                手動でシートにまとめて書き出す用。フィルタ条件付きで複数登録可
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              asChild
+            >
+              <a
+                href={`/exports?new=1&eventTypeId=${eventId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                ＋ 新規作成
+              </a>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {exportTasks.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                このイベント専用の排出タスクはまだありません
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {exportTasks.map((t) => (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between gap-2 border rounded-md px-3 py-2 flex-wrap"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-sm">{t.name}</div>
+                      <a
+                        href={t.spreadsheetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline break-all"
+                      >
+                        {t.spreadsheetUrl}
+                      </a>
+                      {t.lastRunAt && (
+                        <div
+                          className={`text-[10px] mt-1 ${
+                            t.lastRunStatus === "error"
+                              ? "text-destructive"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          最終実行:{" "}
+                          {new Date(t.lastRunAt).toLocaleString("ja-JP")}
+                          {t.lastRunStatus === "success"
+                            ? ` → 成功 (${t.lastRunRowCount}件)`
+                            : t.lastRunStatus === "error"
+                            ? ` → 失敗: ${t.lastRunError}`
+                            : ""}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => runExportTask(t.id)}
+                        disabled={runningTaskId === t.id}
+                      >
+                        {runningTaskId === t.id ? "実行中..." : "実行"}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        asChild
+                      >
+                        <a
+                          href={`/exports?edit=${t.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          編集
+                        </a>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => deleteExportTask(t.id)}
+                        className="text-destructive"
+                      >
+                        削除
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 

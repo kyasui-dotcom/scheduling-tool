@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,7 @@ const EMPTY_TASK: Omit<ExportTask, "id" | "updatedAt" | "lastRunAt" | "lastRunSt
 };
 
 export default function ExportsPage() {
+  const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<ExportTask[]>([]);
   const [events, setEvents] = useState<EventTypeOpt[]>([]);
   const [teamUsers, setTeamUsers] = useState<UserOpt[]>([]);
@@ -86,6 +88,28 @@ export default function ExportsPage() {
   useEffect(() => {
     Promise.all([loadTasks(), loadOptions()]).finally(() => setLoading(false));
   }, []);
+
+  // Auto-open new task form when ?new=1 (optionally with eventTypeId prefilled)
+  // or edit form when ?edit=<taskId>
+  useEffect(() => {
+    if (loading) return;
+    if (searchParams.get("new") === "1") {
+      const prefEventTypeId = searchParams.get("eventTypeId");
+      setForm({
+        ...EMPTY_TASK,
+        eventTypeId: prefEventTypeId || null,
+      });
+      setEditingId("new");
+    } else {
+      const editId = searchParams.get("edit");
+      if (editId) {
+        const target = tasks.find((t) => t.id === editId);
+        if (target) openEdit(target);
+      }
+    }
+    // Only on first ready render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, tasks.length]);
 
   function openNew() {
     setForm({ ...EMPTY_TASK });
