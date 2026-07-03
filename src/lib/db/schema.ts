@@ -196,6 +196,38 @@ export const eventTypeMembers = pgTable(
   ]
 );
 
+export const exportTasks = pgTable("export_task", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ownerUserId: text("owner_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  spreadsheetUrl: text("spreadsheet_url").notNull(),
+  sheetName: varchar("sheet_name", { length: 128 }),
+  // Filters (all nullable → no filter)
+  eventTypeId: uuid("event_type_id").references(() => eventTypes.id, {
+    onDelete: "set null",
+  }),
+  assigneeUserId: text("assignee_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  status: varchar("status", { length: 32 }).notNull().default("confirmed"), // confirmed / cancelled / all
+  daysBack: integer("days_back"), // if set, use "last N days"; overrides absolute dates
+  fromDate: text("from_date"), // YYYY-MM-DD
+  toDate: text("to_date"),
+  includeHeader: boolean("include_header").notNull().default(false),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  lastRunStatus: varchar("last_run_status", { length: 32 }), // success / error
+  lastRunError: text("last_run_error"),
+  lastRunRowCount: integer("last_run_row_count"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const availabilitySchedules = pgTable("availability_schedule", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id")

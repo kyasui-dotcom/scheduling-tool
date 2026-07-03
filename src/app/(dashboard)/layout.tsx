@@ -47,6 +47,12 @@ export default async function DashboardLayout({
                 予約管理
               </Link>
               <Link
+                href="/exports"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                シート排出
+              </Link>
+              <Link
                 href="/availability"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >

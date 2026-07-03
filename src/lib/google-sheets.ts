@@ -50,3 +50,43 @@ export async function appendRowToSheet(params: {
     },
   });
 }
+
+/**
+ * Append many rows in a single API call.
+ */
+export async function appendRowsToSheet(params: {
+  userId: string;
+  spreadsheetUrl: string;
+  rows: (string | number | null | undefined)[][];
+  sheetName?: string;
+}): Promise<void> {
+  const sheetId = extractSheetIdFromUrl(params.spreadsheetUrl);
+  if (!sheetId) throw new Error("Invalid Google Sheets URL");
+  if (params.rows.length === 0) return;
+
+  const accessToken = await getValidGoogleToken(params.userId);
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: accessToken });
+  const sheets = google.sheets({ version: "v4", auth });
+
+  let range: string;
+  if (params.sheetName) {
+    range = `${params.sheetName}!A1`;
+  } else {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+    const first = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
+    range = `${first}!A1`;
+  }
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: sheetId,
+    range,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: params.rows.map((row) =>
+        row.map((v) => (v == null ? "" : String(v)))
+      ),
+    },
+  });
+}
