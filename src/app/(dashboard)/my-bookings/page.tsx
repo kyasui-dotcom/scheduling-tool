@@ -93,16 +93,25 @@ export default async function MyBookingsPage({
         </p>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <TabLink href="/my-bookings" active={tab === "upcoming"}>
-          今後 ({upcoming.length})
-        </TabLink>
-        <TabLink href="/my-bookings?tab=past" active={tab === "past"}>
-          過去 ({past.length})
-        </TabLink>
-        <TabLink href="/my-bookings?tab=all" active={tab === "all"}>
-          すべて ({rows.length})
-        </TabLink>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <TabLink href="/my-bookings" active={tab === "upcoming"}>
+            今後 ({upcoming.length})
+          </TabLink>
+          <TabLink href="/my-bookings?tab=past" active={tab === "past"}>
+            過去 ({past.length})
+          </TabLink>
+          <TabLink href="/my-bookings?tab=all" active={tab === "all"}>
+            すべて ({rows.length})
+          </TabLink>
+        </div>
+        <a
+          href="/api/bookings/export?scope=me"
+          className="text-sm px-3 py-1.5 rounded-md border hover:bg-muted"
+          download
+        >
+          CSV エクスポート
+        </a>
       </div>
 
       {list.length === 0 ? (

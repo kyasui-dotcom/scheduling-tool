@@ -183,13 +183,40 @@ export async function POST(req: NextRequest) {
       meetingId = zoom.meetingId;
     }
 
-    // Create Google Calendar event
+    // Build custom question Q&A lines
+    const customAnswerLines: string[] = [];
+    if (
+      Array.isArray(data.guestAnswers) &&
+      Array.isArray(eventType.customQuestions)
+    ) {
+      const qMap = new Map<string, string>();
+      for (const q of eventType.customQuestions as Array<{
+        id: string;
+        question: string;
+      }>) {
+        if (q?.id) qMap.set(q.id, q.question);
+      }
+      for (const a of data.guestAnswers) {
+        const q = qMap.get(a.questionId) || "(質問)";
+        const ans = Array.isArray(a.answer) ? a.answer.join(", ") : a.answer;
+        const ansStr = String(ans);
+        if (ansStr.length > 0) {
+          customAnswerLines.push(`■ ${q}\n${ansStr}`);
+        }
+      }
+    }
+
+    // Create Google Calendar event description
     const description = [
-      `Meeting: ${eventType.title}`,
-      `Company: ${data.guestCompanyName}`,
-      `Guest: ${data.guestName} (${data.guestEmail})`,
-      data.guestNotes ? `Notes: ${data.guestNotes}` : "",
-      meetingUrl ? `Meeting Link: ${meetingUrl}` : "",
+      `【${eventType.title}】`,
+      `会社名: ${data.guestCompanyName}`,
+      `担当者: ${data.guestName}`,
+      `メール: ${data.guestEmail}`,
+      meetingUrl ? `会議URL: ${meetingUrl}` : "",
+      data.guestNotes ? `\n■ お客様メモ\n${data.guestNotes}` : "",
+      customAnswerLines.length > 0
+        ? `\n===== 予約時の入力内容 =====\n${customAnswerLines.join("\n\n")}`
+        : "",
     ]
       .filter(Boolean)
       .join("\n");
