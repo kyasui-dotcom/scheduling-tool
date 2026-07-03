@@ -15,6 +15,9 @@ interface Props {
   minNoticeMinutes?: number;
   maxAdvanceDays?: number;
   excludeEventTypeId?: string;
+  businessHours?:
+    | Array<{ dayOfWeek: string; startTime: string; endTime: string }>
+    | null;
 }
 
 interface DayResult {
@@ -34,6 +37,7 @@ export function AvailabilityPreview({
   minNoticeMinutes,
   maxAdvanceDays,
   excludeEventTypeId,
+  businessHours,
 }: Props) {
   const [days, setDays] = useState<DayResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,6 +70,7 @@ export function AvailabilityPreview({
           startDate,
           days: 7,
           excludeEventTypeId,
+          businessHours,
         }),
       });
       if (res.ok) {
@@ -91,6 +96,7 @@ export function AvailabilityPreview({
     maxAdvanceDays,
     timezone,
     excludeEventTypeId,
+    businessHours,
   ]);
 
   const formatTime = (iso: string) =>

@@ -16,6 +16,24 @@ const previewSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   days: z.number().int().min(1).max(14).default(7),
   excludeEventTypeId: z.string().uuid().optional(),
+  businessHours: z
+    .array(
+      z.object({
+        dayOfWeek: z.enum([
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+        ]),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/),
+      })
+    )
+    .nullable()
+    .optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -56,6 +74,7 @@ export async function POST(req: NextRequest) {
       maxAdvanceDays: data.maxAdvanceDays,
       schedulingMode: data.schedulingMode,
       excludeEventTypeId: data.excludeEventTypeId,
+      businessHours: data.businessHours,
     });
 
     const results = range.map((r) => ({

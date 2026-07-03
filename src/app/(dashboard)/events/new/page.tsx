@@ -16,6 +16,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MemberPicker } from "@/components/member-picker";
 import { AvailabilityPreview } from "@/components/availability-preview";
+import {
+  BusinessHoursEditor,
+  type BusinessHour,
+} from "@/components/business-hours-editor";
 import { CustomQuestionEditor } from "@/components/custom-question-editor";
 import type { CustomQuestion } from "@/lib/validations/event";
 import { toast } from "sonner";
@@ -36,6 +40,7 @@ export default function NewEventPage() {
   const [owner, setOwner] = useState<Member | null>(null);
   const [sameDomainUsers, setSameDomainUsers] = useState<Member[]>([]);
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
+  const [businessHours, setBusinessHours] = useState<BusinessHour[] | null>(null);
 
   useEffect(() => {
     fetch("/api/users/me")
@@ -98,6 +103,7 @@ export default function NewEventPage() {
         ownerUserId: owner && me && owner.id !== me.id ? owner.id : undefined,
         memberUserIds: selectedMembers.map((m) => m.id),
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
+        businessHours,
       };
 
       const res = await fetch("/api/events", {
@@ -165,6 +171,20 @@ export default function NewEventPage() {
                   "全メンバーが空いている時間のみ選択可能。"}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              このイベントの営業日時
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BusinessHoursEditor
+              value={businessHours}
+              onChange={setBusinessHours}
+            />
           </CardContent>
         </Card>
 
@@ -381,6 +401,7 @@ export default function NewEventPage() {
                 bufferAfterMinutes={form.bufferAfterMinutes}
                 minNoticeMinutes={form.minNoticeMinutes}
                 maxAdvanceDays={form.maxAdvanceDays}
+                businessHours={businessHours}
               />
             </CardContent>
           </Card>

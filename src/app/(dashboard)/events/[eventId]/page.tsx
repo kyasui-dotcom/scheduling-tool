@@ -17,6 +17,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { MemberPicker } from "@/components/member-picker";
 import { AvailabilityPreview } from "@/components/availability-preview";
+import {
+  BusinessHoursEditor,
+  type BusinessHour,
+} from "@/components/business-hours-editor";
 import { CustomQuestionEditor } from "@/components/custom-question-editor";
 import type { CustomQuestion } from "@/lib/validations/event";
 import { toast } from "sonner";
@@ -43,6 +47,7 @@ export default function EditEventPage({
   const [owner, setOwner] = useState<Member | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
+  const [businessHours, setBusinessHours] = useState<BusinessHour[] | null>(null);
   const [form, setForm] = useState({
     title: "",
     slug: "",
@@ -99,6 +104,9 @@ export default function EditEventPage({
           if (data.customQuestions) {
             setCustomQuestions(data.customQuestions);
           }
+          if (Array.isArray(data.businessHours)) {
+            setBusinessHours(data.businessHours);
+          }
 
           // Fetch owner profile to display as locked badge in MemberPicker
           fetch(`/api/users/details?ids=${data.userId}`)
@@ -147,6 +155,7 @@ export default function EditEventPage({
         bookingWindowEnd: form.bookingWindowEnd || null,
         memberUserIds: selectedMembers.map((m) => m.id),
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
+        businessHours,
       };
 
       const res = await fetch(`/api/events/${eventId}`, {
@@ -243,6 +252,20 @@ export default function EditEventPage({
                   "全メンバーが空いている時間のみ選択可能。"}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              このイベントの営業日時
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BusinessHoursEditor
+              value={businessHours}
+              onChange={setBusinessHours}
+            />
           </CardContent>
         </Card>
 
@@ -457,6 +480,7 @@ export default function EditEventPage({
                 minNoticeMinutes={form.minNoticeMinutes}
                 maxAdvanceDays={form.maxAdvanceDays}
                 excludeEventTypeId={eventId}
+                businessHours={businessHours}
               />
             </CardContent>
           </Card>

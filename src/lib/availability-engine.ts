@@ -77,6 +77,7 @@ export async function getAvailability(params: {
     schedulingMode: eventType.schedulingMode,
     bookingWindowStart: eventType.bookingWindowStart,
     bookingWindowEnd: eventType.bookingWindowEnd,
+    businessHours: eventType.businessHours,
   });
 }
 
@@ -98,6 +99,9 @@ export async function getAvailabilityFromConfig(params: {
   excludeEventTypeId?: string;
   bookingWindowStart?: string | null;
   bookingWindowEnd?: string | null;
+  businessHours?:
+    | Array<{ dayOfWeek: string; startTime: string; endTime: string }>
+    | null;
 }): Promise<AvailabilityResult> {
   return computeAvailability({
     memberUserIds: params.memberUserIds,
@@ -113,6 +117,7 @@ export async function getAvailabilityFromConfig(params: {
     schedulingMode: params.schedulingMode,
     bookingWindowStart: params.bookingWindowStart,
     bookingWindowEnd: params.bookingWindowEnd,
+    businessHours: params.businessHours,
   });
 }
 
@@ -130,6 +135,9 @@ async function computeAvailability(params: {
   schedulingMode: string;
   bookingWindowStart?: string | null;
   bookingWindowEnd?: string | null;
+  businessHours?:
+    | Array<{ dayOfWeek: string; startTime: string; endTime: string }>
+    | null;
 }): Promise<AvailabilityResult> {
   const mode = params.slotMode;
   const memberUserIds = params.memberUserIds;
@@ -142,6 +150,7 @@ async function computeAvailability(params: {
     bufferBeforeMinutes: params.bufferBeforeMinutes,
     bufferAfterMinutes: params.bufferAfterMinutes,
     schedulingMode: params.schedulingMode,
+    businessHours: params.businessHours,
   });
 
   let merged: MergedWindow[];
@@ -340,6 +349,7 @@ export async function getAvailabilityRange(params: {
     excludeEventTypeId: params.eventTypeId,
     bookingWindowStart: eventType.bookingWindowStart,
     bookingWindowEnd: eventType.bookingWindowEnd,
+    businessHours: eventType.businessHours,
   });
 }
 
@@ -364,6 +374,9 @@ export async function getAvailabilityRangeFromConfig(params: {
   excludeEventTypeId?: string;
   bookingWindowStart?: string | null;
   bookingWindowEnd?: string | null;
+  businessHours?:
+    | Array<{ dayOfWeek: string; startTime: string; endTime: string }>
+    | null;
 }): Promise<Array<AvailabilityResult & { date: string }>> {
   const memberUserIds = params.memberUserIds;
   const startDate = new Date(`${params.startDate}T00:00:00Z`);
@@ -410,6 +423,7 @@ export async function getAvailabilityRangeFromConfig(params: {
       bufferBeforeMinutes: params.bufferBeforeMinutes ?? 0,
       bufferAfterMinutes: params.bufferAfterMinutes ?? 0,
       schedulingMode: params.schedulingMode,
+      businessHours: params.businessHours,
     });
 
     const dayResult = sliceAndAggregate({
@@ -514,6 +528,9 @@ function computePerUserWindowsFromCache(params: {
   bufferBeforeMinutes: number;
   bufferAfterMinutes: number;
   schedulingMode: string;
+  businessHours?:
+    | Array<{ dayOfWeek: string; startTime: string; endTime: string }>
+    | null;
 }): Map<string, RawWindow[]> {
   const dayStartUtc = new Date(`${params.date}T00:00:00Z`);
   const dayEndUtc = new Date(`${params.date}T23:59:59Z`);
@@ -540,7 +557,12 @@ function computePerUserWindowsFromCache(params: {
       new Date(params.date + "T12:00:00Z"),
       stat.schedule.timezone
     );
-    const dayRules = stat.rules.filter((r) => r.dayOfWeek === dow);
+    // Event-level business hours override the user's schedule when set
+    const effectiveRules =
+      params.businessHours && params.businessHours.length > 0
+        ? params.businessHours
+        : stat.rules;
+    const dayRules = effectiveRules.filter((r) => r.dayOfWeek === dow);
 
     let windows: RawWindow[] = [];
     const overrideTimes = dayOverrides.filter(
@@ -685,6 +707,9 @@ async function computePerUserWindows(params: {
   bufferBeforeMinutes: number;
   bufferAfterMinutes: number;
   schedulingMode: string;
+  businessHours?:
+    | Array<{ dayOfWeek: string; startTime: string; endTime: string }>
+    | null;
 }): Promise<Map<string, RawWindow[]>> {
   const dayStart = new Date(`${params.date}T00:00:00Z`);
   const dayEnd = new Date(`${params.date}T23:59:59Z`);
@@ -735,6 +760,7 @@ async function computePerUserWindows(params: {
     bufferBeforeMinutes: params.bufferBeforeMinutes,
     bufferAfterMinutes: params.bufferAfterMinutes,
     schedulingMode: params.schedulingMode,
+    businessHours: params.businessHours,
   });
 }
 

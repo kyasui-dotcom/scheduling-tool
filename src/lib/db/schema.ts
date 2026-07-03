@@ -141,6 +141,20 @@ export const eventTypes = pgTable(
     calendarTitleFormat: text("calendar_title_format")
       .notNull()
       .default("{title}{company}/{name}様"),
+    businessHours: jsonb("business_hours").$type<
+      Array<{
+        dayOfWeek:
+          | "monday"
+          | "tuesday"
+          | "wednesday"
+          | "thursday"
+          | "friday"
+          | "saturday"
+          | "sunday";
+        startTime: string; // HH:MM
+        endTime: string; // HH:MM
+      }>
+    >(),
     customQuestions: jsonb("custom_questions").$type<
       Array<{
         id: string;
