@@ -286,16 +286,19 @@ export async function selectAssignee(
     if (b.userId) countMap.set(b.userId, (countMap.get(b.userId) || 0) + 1);
   }
 
+  // Find minimum booking count among candidates
   let minCount = Infinity;
-  let assignee = availableUserIds[0];
   for (const uid of availableUserIds) {
-    const count = countMap.get(uid) ?? 0;
-    if (count < minCount) {
-      minCount = count;
-      assignee = uid;
-    }
+    const c = countMap.get(uid) ?? 0;
+    if (c < minCount) minCount = c;
   }
-  return assignee;
+
+  // Collect everyone tied at the minimum, then random pick
+  // → 公平性 (少ない人が優先) + 同数ならバイアスなし
+  const tied = availableUserIds.filter(
+    (uid) => (countMap.get(uid) ?? 0) === minCount
+  );
+  return tied[Math.floor(Math.random() * tied.length)];
 }
 
 /**
