@@ -729,8 +729,11 @@ export default function EditEventPage({
                 onChange={(e) =>
                   updateField("spreadsheetUrl", e.target.value)
                 }
-                placeholder="https://docs.google.com/spreadsheets/d/..."
+                placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=..."
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                書き込み先タブを固定するには、対象のシートを開いた状態のURL (末尾に <span className="font-mono">#gid=...</span> が付いたもの) をコピーしてください。省略時は1枚目のシートに書き込みます。
+              </p>
               <div className="text-xs text-muted-foreground mt-2 space-y-1">
                 <p>
                   設定すると予約が入るたびに 1行追加されます。列順:

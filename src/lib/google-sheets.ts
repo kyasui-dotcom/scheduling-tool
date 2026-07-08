@@ -12,6 +12,16 @@ export function extractSheetIdFromUrl(url: string): string | null {
 }
 
 /**
+ * Extract the sheet (tab) gid from a Google Sheets URL.
+ * Examples: /edit#gid=123456789, /edit?gid=0
+ * Returns null when no gid is present (caller should default to the first sheet).
+ */
+export function extractSheetGidFromUrl(url: string): string | null {
+  const m = url.match(/[?#&]gid=(\d+)/);
+  return m ? m[1] : null;
+}
+
+/**
  * Parse GOOGLE_SPREADSHEET env var as a Google service-account credentials JSON.
  * Accepts either raw JSON or base64-encoded JSON.
  * Returns null if the env var is not set or malformed.
@@ -101,7 +111,10 @@ export async function appendRowToSheet(params: {
     auth: auth as unknown as OAuth2Client,
   });
 
-  const range = await resolveRange(sheets, sheetId, params.sheetName);
+  const range = await resolveRange(sheets, sheetId, {
+    sheetName: params.sheetName,
+    gid: extractSheetGidFromUrl(params.spreadsheetUrl),
+  });
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
@@ -133,7 +146,10 @@ export async function appendRowsToSheet(params: {
     auth: auth as unknown as OAuth2Client,
   });
 
-  const range = await resolveRange(sheets, sheetId, params.sheetName);
+  const range = await resolveRange(sheets, sheetId, {
+    sheetName: params.sheetName,
+    gid: extractSheetGidFromUrl(params.spreadsheetUrl),
+  });
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
@@ -151,10 +167,16 @@ export async function appendRowsToSheet(params: {
 async function resolveRange(
   sheets: ReturnType<typeof google.sheets>,
   spreadsheetId: string,
-  sheetName?: string
+  opts: { sheetName?: string; gid?: string | null }
 ): Promise<string> {
-  if (sheetName) return `${sheetName}!A1`;
+  if (opts.sheetName) return `${opts.sheetName}!A1`;
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  if (opts.gid) {
+    const target = meta.data.sheets?.find(
+      (s) => String(s.properties?.sheetId) === opts.gid
+    );
+    if (target?.properties?.title) return `${target.properties.title}!A1`;
+  }
   const first = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
   return `${first}!A1`;
 }
