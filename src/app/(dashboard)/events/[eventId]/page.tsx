@@ -768,7 +768,7 @@ export default function EditEventPage({
                 placeholder="https://hooks.slack.com/services/T.../B.../..."
               />
               <p className="text-xs text-muted-foreground mt-1">
-                設定すると予約が入るたびに指定 Slack チャンネルに通知します。
+                設定すると予約が入るたびに指定 Slack チャンネルに通知します（未設定なら環境変数 <span className="font-mono">WEBHOOKURL</span> が使われます）。
                 Slack ワークスペース → アプリ → Incoming Webhook で発行してください。
               </p>
             </div>

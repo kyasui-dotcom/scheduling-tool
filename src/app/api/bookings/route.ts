@@ -398,8 +398,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Optional: notify Slack when the event has a webhook configured.
-  if (eventType.slackWebhookUrl) {
+  // Optional: notify Slack.
+  // Priority: per-event slack_webhook_url > WEBHOOKURL env var.
+  const slackWebhookUrl =
+    eventType.slackWebhookUrl || process.env.WEBHOOKURL || null;
+  if (slackWebhookUrl) {
     try {
       const [assignee] = await db
         .select({ name: users.name, email: users.email })
@@ -434,7 +437,7 @@ export async function POST(req: NextRequest) {
       const base = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
       const manageUrl = `${base}/booking-manage/${booking.id}?token=${generateGuestToken(booking.id, data.guestEmail)}`;
 
-      await notifySlackNewBooking(eventType.slackWebhookUrl, {
+      await notifySlackNewBooking(slackWebhookUrl, {
         eventTitle: eventType.title,
         companyName: data.guestCompanyName,
         guestName: data.guestName,
