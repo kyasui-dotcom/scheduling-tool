@@ -70,6 +70,14 @@ export default function ExportsPage() {
   const [form, setForm] = useState<typeof EMPTY_TASK>({ ...EMPTY_TASK });
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState<string>("k.yasui@raksul.com");
+
+  useEffect(() => {
+    fetch("/api/sheets/writer")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.inviteEmail && setInviteEmail(d.inviteEmail))
+      .catch(() => {});
+  }, []);
 
   async function loadTasks() {
     const res = await fetch("/api/exports");
@@ -367,8 +375,8 @@ export default function ExportsPage() {
                 }
                 placeholder="https://docs.google.com/spreadsheets/d/..."
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                <span className="font-mono">k.yasui@raksul.com</span> を編集者として招待してください
+              <p className="text-xs text-muted-foreground mt-1 break-all">
+                <span className="font-mono">{inviteEmail}</span> を編集者として招待してください
               </p>
             </div>
             <div>

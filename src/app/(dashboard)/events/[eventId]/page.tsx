@@ -61,6 +61,14 @@ export default function EditEventPage({
   const [businessHours, setBusinessHours] = useState<BusinessHour[] | null>(null);
   const [exportTasks, setExportTasks] = useState<EventExportTask[]>([]);
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState<string>("k.yasui@raksul.com");
+
+  useEffect(() => {
+    fetch("/api/sheets/writer")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.inviteEmail && setInviteEmail(d.inviteEmail))
+      .catch(() => {});
+  }, []);
   const [form, setForm] = useState({
     title: "",
     slug: "",
@@ -731,8 +739,8 @@ export default function EditEventPage({
                   予約日時 / 開始 / 終了 / イベント名 / 社名 / 担当者名 /
                   メール / 顧客メモ / カスタム質問回答 / 会議URL
                 </p>
-                <p className="text-amber-700 font-medium">
-                  ※ 対象のスプレッドシートに <span className="font-mono">k.yasui@raksul.com</span> を編集者として招待してください
+                <p className="text-amber-700 font-medium break-all">
+                  ※ 対象のスプレッドシートに <span className="font-mono">{inviteEmail}</span> を編集者として招待してください
                 </p>
                 <p>
                   書き込みは上記アカウントで実行されます（担当者側の権限は不要）

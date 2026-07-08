@@ -66,25 +66,28 @@ export async function POST(
     .where(conds.length > 0 ? and(...conds) : undefined)
     .orderBy(desc(bookings.startTime));
 
-  // Resolve writer account
-  const [writer] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, SHEETS_WRITER_EMAIL));
-  if (!writer) {
-    await db
-      .update(exportTasks)
-      .set({
-        lastRunAt: new Date(),
-        lastRunStatus: "error",
-        lastRunError: `Sheets writer (${SHEETS_WRITER_EMAIL}) not signed up`,
-        lastRunRowCount: 0,
-      })
-      .where(eq(exportTasks.id, taskId));
-    return NextResponse.json(
-      { error: `Sheets writer (${SHEETS_WRITER_EMAIL}) not signed up` },
-      { status: 500 }
-    );
+  // Resolve auth: prefer service account (GOOGLE_SPREADSHEET env), fall back
+  // to the SHEETS_WRITER_EMAIL user's OAuth token.
+  let writerUserId: string | undefined;
+  if (!process.env.GOOGLE_SPREADSHEET) {
+    const [writer] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, SHEETS_WRITER_EMAIL));
+    if (!writer) {
+      const msg = `No sheets auth available: set GOOGLE_SPREADSHEET env or sign up ${SHEETS_WRITER_EMAIL}`;
+      await db
+        .update(exportTasks)
+        .set({
+          lastRunAt: new Date(),
+          lastRunStatus: "error",
+          lastRunError: msg,
+          lastRunRowCount: 0,
+        })
+        .where(eq(exportTasks.id, taskId));
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
+    writerUserId = writer.id;
   }
 
   // Prepare rows
@@ -98,7 +101,7 @@ export async function POST(
   try {
     if (toAppend.length > 0) {
       await appendRowsToSheet({
-        userId: writer.id,
+        userId: writerUserId,
         spreadsheetUrl: task.spreadsheetUrl,
         rows: toAppend,
         sheetName: task.sheetName || undefined,
