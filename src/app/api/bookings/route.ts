@@ -17,6 +17,7 @@ import {
   getMultiUserFreeBusy,
 } from "@/lib/google-calendar";
 import { appendRowToSheet } from "@/lib/google-sheets";
+import { generateGuestToken } from "@/lib/guest-token";
 import { createZoomMeeting } from "@/lib/zoom";
 import { addMinutes } from "date-fns";
 import { getDateStringInTimezone } from "@/lib/timezone";
@@ -354,6 +355,10 @@ export async function POST(req: NextRequest) {
           "会議URL",
           "カレンダー担当者",
           "カレンダー担当者メール",
+          "所要分",
+          "会議プラットフォーム",
+          "予約ID",
+          "予約管理URL",
         ],
         values: [
           fmtJst(booking.createdAt),
@@ -368,6 +373,22 @@ export async function POST(req: NextRequest) {
           meetingUrl || "",
           assignee?.name || "",
           assignee?.email || "",
+          String(eventType.durationMinutes),
+          eventType.meetingPlatform === "google_meet"
+            ? "Google Meet"
+            : eventType.meetingPlatform === "zoom"
+            ? "Zoom"
+            : "対面/電話",
+          booking.id,
+          (() => {
+            const appUrl =
+              process.env.NEXT_PUBLIC_APP_URL ||
+              process.env.VERCEL_URL ||
+              "http://localhost:3000";
+            const base = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
+            const token = generateGuestToken(booking.id, data.guestEmail);
+            return `${base}/booking-manage/${booking.id}?token=${token}`;
+          })(),
         ],
       });
     } catch (err) {
