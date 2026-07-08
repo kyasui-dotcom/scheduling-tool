@@ -296,6 +296,12 @@ export async function POST(req: NextRequest) {
         }
         writerUserId = writer.id;
       }
+
+      // Look up the assignee (whose calendar the meeting was created on)
+      const [assignee] = await db
+        .select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, assignedUserId));
       const answersText = (() => {
         if (
           !Array.isArray(data.guestAnswers) ||
@@ -346,6 +352,8 @@ export async function POST(req: NextRequest) {
           "顧客メモ",
           "カスタム質問回答",
           "会議URL",
+          "カレンダー担当者",
+          "カレンダー担当者メール",
         ],
         values: [
           fmtJst(booking.createdAt),
@@ -358,6 +366,8 @@ export async function POST(req: NextRequest) {
           data.guestNotes || "",
           answersText,
           meetingUrl || "",
+          assignee?.name || "",
+          assignee?.email || "",
         ],
       });
     } catch (err) {
