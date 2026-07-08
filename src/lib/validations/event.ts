@@ -80,6 +80,15 @@ export const createEventTypeSchema = z.object({
     .nullable()
     .optional()
     .or(z.literal("")),
+  slackWebhookUrl: z
+    .string()
+    .url()
+    .refine((s) => /hooks\.slack\.com\/services\//.test(s), {
+      message: "Slack Incoming Webhook の URL を指定してください",
+    })
+    .nullable()
+    .optional()
+    .or(z.literal("")),
   ownerUserId: z.string().optional(),
   memberUserIds: z.array(z.string()).optional(),
   customQuestions: z.array(customQuestionSchema).optional(),

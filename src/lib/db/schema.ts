@@ -156,6 +156,7 @@ export const eventTypes = pgTable(
       }>
     >(),
     spreadsheetUrl: text("spreadsheet_url"),
+    slackWebhookUrl: text("slack_webhook_url"),
     customQuestions: jsonb("custom_questions").$type<
       Array<{
         id: string;

@@ -18,6 +18,7 @@ import {
 } from "@/lib/google-calendar";
 import { appendRowToSheet } from "@/lib/google-sheets";
 import { generateGuestToken } from "@/lib/guest-token";
+import { notifySlackNewBooking } from "@/lib/slack";
 import { createZoomMeeting } from "@/lib/zoom";
 import { addMinutes } from "date-fns";
 import { getDateStringInTimezone } from "@/lib/timezone";
@@ -394,6 +395,63 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error("[sheets append] failed:", err);
       // Do not fail the booking — sheets is optional.
+    }
+  }
+
+  // Optional: notify Slack when the event has a webhook configured.
+  if (eventType.slackWebhookUrl) {
+    try {
+      const [assignee] = await db
+        .select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, assignedUserId));
+
+      const customAnswers: { question: string; answer: string }[] = [];
+      if (
+        Array.isArray(data.guestAnswers) &&
+        Array.isArray(eventType.customQuestions)
+      ) {
+        const qMap = new Map<string, string>();
+        for (const q of eventType.customQuestions as Array<{
+          id: string;
+          question: string;
+        }>) {
+          if (q?.id) qMap.set(q.id, q.question);
+        }
+        for (const a of data.guestAnswers) {
+          const q = qMap.get(a.questionId) || "(質問)";
+          const ans = Array.isArray(a.answer) ? a.answer.join(", ") : a.answer;
+          if (String(ans).length > 0) {
+            customAnswers.push({ question: q, answer: String(ans) });
+          }
+        }
+      }
+
+      const appUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.VERCEL_URL ||
+        "http://localhost:3000";
+      const base = appUrl.startsWith("http") ? appUrl : `https://${appUrl}`;
+      const manageUrl = `${base}/booking-manage/${booking.id}?token=${generateGuestToken(booking.id, data.guestEmail)}`;
+
+      await notifySlackNewBooking(eventType.slackWebhookUrl, {
+        eventTitle: eventType.title,
+        companyName: data.guestCompanyName,
+        guestName: data.guestName,
+        guestEmail: data.guestEmail,
+        startTime,
+        endTime,
+        assigneeName: assignee?.name || "",
+        assigneeEmail: assignee?.email || "",
+        meetingUrl: meetingUrl || null,
+        meetingPlatform: eventType.meetingPlatform,
+        customAnswers,
+        guestNotes: data.guestNotes,
+        manageUrl,
+      });
+    } catch (err) {
+      console.error("[slack notify] failed:", err);
+      // Do not fail the booking — Slack is optional.
     }
   }
 

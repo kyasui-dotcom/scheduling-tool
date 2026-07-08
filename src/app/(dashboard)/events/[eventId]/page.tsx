@@ -87,6 +87,7 @@ export default function EditEventPage({
     bookingWindowStart: "" as string,
     bookingWindowEnd: "" as string,
     spreadsheetUrl: "" as string,
+    slackWebhookUrl: "" as string,
   });
 
   useEffect(() => {
@@ -120,6 +121,7 @@ export default function EditEventPage({
             bookingWindowStart: data.bookingWindowStart || "",
             bookingWindowEnd: data.bookingWindowEnd || "",
             spreadsheetUrl: data.spreadsheetUrl || "",
+            slackWebhookUrl: data.slackWebhookUrl || "",
           });
 
           // Store the owner user id and custom questions
@@ -223,6 +225,7 @@ export default function EditEventPage({
         bookingWindowStart: form.bookingWindowStart || null,
         bookingWindowEnd: form.bookingWindowEnd || null,
         spreadsheetUrl: form.spreadsheetUrl || null,
+        slackWebhookUrl: form.slackWebhookUrl || null,
         memberUserIds: selectedMembers.map((m) => m.id),
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
         businessHours,
@@ -749,6 +752,25 @@ export default function EditEventPage({
                   書き込みは上記アカウントで実行されます（担当者側の権限は不要）
                 </p>
               </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <Label htmlFor="slackWebhookUrl">
+                Slack Incoming Webhook URL
+              </Label>
+              <Input
+                id="slackWebhookUrl"
+                type="url"
+                value={form.slackWebhookUrl}
+                onChange={(e) =>
+                  updateField("slackWebhookUrl", e.target.value)
+                }
+                placeholder="https://hooks.slack.com/services/T.../B.../..."
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                設定すると予約が入るたびに指定 Slack チャンネルに通知します。
+                Slack ワークスペース → アプリ → Incoming Webhook で発行してください。
+              </p>
             </div>
           </CardContent>
         </Card>
