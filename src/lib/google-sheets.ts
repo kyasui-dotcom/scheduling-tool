@@ -100,6 +100,7 @@ export async function appendRowToSheet(params: {
   spreadsheetUrl: string;
   values: (string | number | null | undefined)[];
   sheetName?: string;
+  header?: string[]; // written as the very first row when the target tab is empty
 }): Promise<void> {
   const sheetId = extractSheetIdFromUrl(params.spreadsheetUrl);
   if (!sheetId) throw new Error("Invalid Google Sheets URL");
@@ -116,14 +117,19 @@ export async function appendRowToSheet(params: {
     gid: extractSheetGidFromUrl(params.spreadsheetUrl),
   });
 
+  const rows: string[][] = [];
+  if (params.header && params.header.length > 0) {
+    const isEmpty = await isSheetEmpty(sheets, sheetId, range);
+    if (isEmpty) rows.push(params.header);
+  }
+  rows.push(params.values.map((v) => (v == null ? "" : String(v))));
+
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
     range,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
-    requestBody: {
-      values: [params.values.map((v) => (v == null ? "" : String(v)))],
-    },
+    requestBody: { values: rows },
   });
 }
 
@@ -135,6 +141,7 @@ export async function appendRowsToSheet(params: {
   spreadsheetUrl: string;
   rows: (string | number | null | undefined)[][];
   sheetName?: string;
+  header?: string[]; // written as the first row when the target tab is empty
 }): Promise<void> {
   const sheetId = extractSheetIdFromUrl(params.spreadsheetUrl);
   if (!sheetId) throw new Error("Invalid Google Sheets URL");
@@ -151,17 +158,39 @@ export async function appendRowsToSheet(params: {
     gid: extractSheetGidFromUrl(params.spreadsheetUrl),
   });
 
+  const finalRows: string[][] = [];
+  if (params.header && params.header.length > 0) {
+    const isEmpty = await isSheetEmpty(sheets, sheetId, range);
+    if (isEmpty) finalRows.push(params.header);
+  }
+  for (const row of params.rows) {
+    finalRows.push(row.map((v) => (v == null ? "" : String(v))));
+  }
+
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
     range,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
-    requestBody: {
-      values: params.rows.map((row) =>
-        row.map((v) => (v == null ? "" : String(v)))
-      ),
-    },
+    requestBody: { values: finalRows },
   });
+}
+
+/**
+ * Check if the target tab has no data yet.
+ * We probe A1:Z1 — if there are no values, treat it as empty.
+ */
+async function isSheetEmpty(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+  range: string
+): Promise<boolean> {
+  const sheetName = range.split("!")[0];
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A1:Z1`,
+  });
+  return !res.data.values || res.data.values.length === 0;
 }
 
 async function resolveRange(

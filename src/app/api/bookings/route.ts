@@ -335,6 +335,18 @@ export async function POST(req: NextRequest) {
       await appendRowToSheet({
         userId: writerUserId, // undefined when env service account is used
         spreadsheetUrl: eventType.spreadsheetUrl,
+        header: [
+          "予約日時",
+          "開始日時",
+          "終了日時",
+          "イベント名",
+          "社名",
+          "担当者名",
+          "メール",
+          "顧客メモ",
+          "カスタム質問回答",
+          "会議URL",
+        ],
         values: [
           fmtJst(booking.createdAt),
           fmtJst(booking.startTime),
