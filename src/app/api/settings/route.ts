@@ -14,11 +14,22 @@ export async function GET() {
     .select({
       username: users.username,
       timezone: users.timezone,
+      defaultSlackWebhookUrl: users.defaultSlackWebhookUrl,
+      defaultSpreadsheetUrl: users.defaultSpreadsheetUrl,
+      defaultCalendarTitleFormat: users.defaultCalendarTitleFormat,
     })
     .from(users)
     .where(eq(users.id, session.user.id));
 
-  return NextResponse.json(user || { username: "", timezone: "Asia/Tokyo" });
+  return NextResponse.json(
+    user || {
+      username: "",
+      timezone: "Asia/Tokyo",
+      defaultSlackWebhookUrl: null,
+      defaultSpreadsheetUrl: null,
+      defaultCalendarTitleFormat: null,
+    }
+  );
 }
 
 export async function PUT(req: NextRequest) {
@@ -28,7 +39,13 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { username, timezone } = body;
+  const {
+    username,
+    timezone,
+    defaultSlackWebhookUrl,
+    defaultSpreadsheetUrl,
+    defaultCalendarTitleFormat,
+  } = body;
 
   if (username) {
     // Validate username format
@@ -60,6 +77,19 @@ export async function PUT(req: NextRequest) {
     .set({
       username: username || undefined,
       timezone: timezone || undefined,
+      // Allow explicit null to clear; undefined means "don't touch"
+      defaultSlackWebhookUrl:
+        defaultSlackWebhookUrl === undefined
+          ? undefined
+          : defaultSlackWebhookUrl || null,
+      defaultSpreadsheetUrl:
+        defaultSpreadsheetUrl === undefined
+          ? undefined
+          : defaultSpreadsheetUrl || null,
+      defaultCalendarTitleFormat:
+        defaultCalendarTitleFormat === undefined
+          ? undefined
+          : defaultCalendarTitleFormat || null,
       updatedAt: new Date(),
     })
     .where(eq(users.id, session.user.id));

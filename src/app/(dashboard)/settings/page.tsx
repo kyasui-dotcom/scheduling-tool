@@ -12,6 +12,11 @@ export default function SettingsPage() {
   const { data: session } = useSession();
   const [username, setUsername] = useState("");
   const [timezone, setTimezone] = useState("Asia/Tokyo");
+  const [defaultSlackWebhookUrl, setDefaultSlackWebhookUrl] = useState("");
+  const [defaultSpreadsheetUrl, setDefaultSpreadsheetUrl] = useState("");
+  const [defaultCalendarTitleFormat, setDefaultCalendarTitleFormat] = useState(
+    "{title}{company}/{name}様"
+  );
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -23,6 +28,11 @@ export default function SettingsPage() {
           const data = await res.json();
           setUsername(data.username || "");
           setTimezone(data.timezone || "Asia/Tokyo");
+          setDefaultSlackWebhookUrl(data.defaultSlackWebhookUrl || "");
+          setDefaultSpreadsheetUrl(data.defaultSpreadsheetUrl || "");
+          setDefaultCalendarTitleFormat(
+            data.defaultCalendarTitleFormat || "{title}{company}/{name}様"
+          );
         }
       } catch {
         // Use defaults
@@ -39,7 +49,13 @@ export default function SettingsPage() {
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, timezone }),
+        body: JSON.stringify({
+          username,
+          timezone,
+          defaultSlackWebhookUrl,
+          defaultSpreadsheetUrl,
+          defaultCalendarTitleFormat,
+        }),
       });
       if (res.ok) {
         toast.success("設定を保存しました");
@@ -123,6 +139,64 @@ export default function SettingsPage() {
             <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
             <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
           </select>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            イベント作成時のデフォルト
+          </CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            ここで設定した値は、新しくイベントを作成する時にフォームにプリセットされます。個別イベントで上書き可能です。
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="def-slack">
+              Slack Webhook URL（デフォルト）
+            </Label>
+            <Input
+              id="def-slack"
+              type="url"
+              value={defaultSlackWebhookUrl}
+              onChange={(e) => setDefaultSlackWebhookUrl(e.target.value)}
+              placeholder="https://hooks.slack.com/services/..."
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              新規イベント作成時に自動セットされ、その時点から編集可能
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="def-sheet">
+              Google スプレッドシート URL（デフォルト）
+            </Label>
+            <Input
+              id="def-sheet"
+              type="url"
+              value={defaultSpreadsheetUrl}
+              onChange={(e) => setDefaultSpreadsheetUrl(e.target.value)}
+              placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=..."
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              「共通の受け皿シートを1枚用意しておく」場合など
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="def-title">
+              カレンダーイベントのタイトル形式（デフォルト）
+            </Label>
+            <Input
+              id="def-title"
+              value={defaultCalendarTitleFormat}
+              onChange={(e) => setDefaultCalendarTitleFormat(e.target.value)}
+              placeholder="{title}{company}/{name}様"
+              className="font-mono"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              プレースホルダー: <code>{"{title}"}</code> / <code>{"{company}"}</code> / <code>{"{name}"}</code>
+            </p>
+          </div>
         </CardContent>
       </Card>
 

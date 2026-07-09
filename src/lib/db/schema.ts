@@ -62,6 +62,10 @@ export const users = pgTable("user", {
   image: text("image"),
   username: varchar("username", { length: 64 }).unique(),
   timezone: varchar("timezone", { length: 64 }).default("Asia/Tokyo"),
+  // Per-user default values applied when creating a new event
+  defaultSlackWebhookUrl: text("default_slack_webhook_url"),
+  defaultSpreadsheetUrl: text("default_spreadsheet_url"),
+  defaultCalendarTitleFormat: text("default_calendar_title_format"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

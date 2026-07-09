@@ -17,6 +17,9 @@ export async function GET() {
       email: users.email,
       image: users.image,
       username: users.username,
+      defaultSlackWebhookUrl: users.defaultSlackWebhookUrl,
+      defaultSpreadsheetUrl: users.defaultSpreadsheetUrl,
+      defaultCalendarTitleFormat: users.defaultCalendarTitleFormat,
     })
     .from(users)
     .where(eq(users.id, session.user.id));

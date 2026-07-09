@@ -57,6 +57,16 @@ export default function NewEventPage() {
         if (u) {
           setMe(u);
           setOwner(u);
+          // Apply user's own defaults to the new event form
+          setForm((prev) => ({
+            ...prev,
+            slackWebhookUrl:
+              prev.slackWebhookUrl || u.defaultSlackWebhookUrl || "",
+            spreadsheetUrl:
+              prev.spreadsheetUrl || u.defaultSpreadsheetUrl || "",
+            calendarTitleFormat:
+              u.defaultCalendarTitleFormat || prev.calendarTitleFormat,
+          }));
         }
       })
       .catch(() => {});
