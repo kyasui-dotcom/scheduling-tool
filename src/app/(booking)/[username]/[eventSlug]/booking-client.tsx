@@ -173,8 +173,6 @@ export function BookingClient({ eventType, organizer }: Props) {
   const windows = dayData?.windows || [];
 
   function navigateToConfirm(startIso: string) {
-    const pathParts = window.location.pathname.split("/");
-    const eventSlug = pathParts[pathParts.length - 1];
     const params = new URLSearchParams({
       slot: startIso,
       timezone,
@@ -184,7 +182,9 @@ export function BookingClient({ eventType, organizer }: Props) {
     const rescheduleToken = urlParams.get("token");
     if (rescheduleId) params.set("reschedule", rescheduleId);
     if (rescheduleToken) params.set("token", rescheduleToken);
-    router.push(`/${organizer.username}/${eventSlug}/confirm?${params}`);
+    // Works for both /<username>/<slug> and /b/<slug> — just tack /confirm on
+    const currentPath = window.location.pathname.replace(/\/$/, "");
+    router.push(`${currentPath}/confirm?${params}`);
   }
 
   const monthStart = startOfMonth(currentMonth);

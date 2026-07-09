@@ -8,32 +8,41 @@ export async function GET(req: NextRequest) {
   const username = searchParams.get("username");
   const slug = searchParams.get("slug");
 
-  if (!username || !slug) {
+  if (!slug) {
     return NextResponse.json(
-      { error: "username and slug are required" },
+      { error: "slug is required" },
       { status: 400 }
     );
   }
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, username));
-
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  // Prefer slug-only lookup (fully random URL). Fall back to (user, slug)
+  // for the legacy /<username>/<slug> URL if username is provided.
+  let eventType;
+  if (username) {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username));
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    [eventType] = await db
+      .select()
+      .from(eventTypes)
+      .where(
+        and(
+          eq(eventTypes.userId, user.id),
+          eq(eventTypes.slug, slug),
+          eq(eventTypes.isActive, true)
+        )
+      );
+  } else {
+    [eventType] = await db
+      .select()
+      .from(eventTypes)
+      .where(and(eq(eventTypes.slug, slug), eq(eventTypes.isActive, true)))
+      .limit(1);
   }
-
-  const [eventType] = await db
-    .select()
-    .from(eventTypes)
-    .where(
-      and(
-        eq(eventTypes.userId, user.id),
-        eq(eventTypes.slug, slug),
-        eq(eventTypes.isActive, true)
-      )
-    );
 
   if (!eventType) {
     return NextResponse.json(

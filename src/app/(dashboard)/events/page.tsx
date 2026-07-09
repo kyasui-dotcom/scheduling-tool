@@ -209,7 +209,7 @@ export default async function EventsPage({
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground bg-muted p-2 rounded font-mono truncate">
-                      {appUrl}/{ownerUsername}/{event.slug}
+                      {appUrl}/b/{event.slug}
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" asChild>
@@ -217,7 +217,7 @@ export default async function EventsPage({
                       </Button>
                       <Button variant="ghost" size="sm" asChild>
                         <Link
-                          href={`/${ownerUsername}/${event.slug}`}
+                          href={`/b/${event.slug}`}
                           target="_blank"
                         >
                           プレビュー

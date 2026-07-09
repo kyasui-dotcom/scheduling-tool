@@ -23,9 +23,10 @@ export function EmbedDialog({ username, slug, appUrl }: EmbedDialogProps) {
   const [width, setWidth] = useState("100%");
   const [height, setHeight] = useState("700");
 
-  const embedUrl = `${appUrl}/embed/${username}/${slug}`;
+  const publicUrl = `${appUrl}/b/${slug}`;
+  const embedUrl = `${appUrl}/embed/b/${slug}`;
   const iframeCode = `<iframe src="${embedUrl}" width="${width}" height="${height}px" frameborder="0" style="border: 1px solid #e5e7eb; border-radius: 8px;"></iframe>`;
-  const linkCode = `<a href="${appUrl}/${username}/${slug}" target="_blank" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;border-radius:8px;text-decoration:none;font-weight:500;">予約する</a>`;
+  const linkCode = `<a href="${publicUrl}" target="_blank" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;border-radius:8px;text-decoration:none;font-weight:500;">予約する</a>`;
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
@@ -111,16 +112,14 @@ export function EmbedDialog({ username, slug, appUrl }: EmbedDialogProps) {
             <h3 className="text-sm font-semibold">直接リンク</h3>
             <div className="flex gap-2">
               <Input
-                value={`${appUrl}/${username}/${slug}`}
+                value={publicUrl}
                 readOnly
                 className="text-xs font-mono"
               />
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  copyToClipboard(`${appUrl}/${username}/${slug}`)
-                }
+                onClick={() => copyToClipboard(publicUrl)}
               >
                 コピー
               </Button>
