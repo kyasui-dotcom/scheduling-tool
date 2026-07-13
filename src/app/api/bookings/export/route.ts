@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
     "顧客メモ",
     "顧客タイムゾーン",
     "カスタム質問回答",
+    "何回目",
   ];
 
   const csvLines: string[] = [header.map(csvEscape).join(",")];
@@ -160,6 +161,7 @@ export async function GET(req: NextRequest) {
         csvEscape(booking.guestNotes || ""),
         csvEscape(booking.guestTimezone),
         csvEscape(answersText),
+        csvEscape(booking.visitNumber ?? ""),
       ].join(",")
     );
   }

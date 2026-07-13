@@ -278,6 +278,8 @@ export const bookings = pgTable("booking", {
     .default(""),
   guestName: varchar("guest_name", { length: 255 }).notNull(),
   guestEmail: varchar("guest_email", { length: 320 }).notNull(),
+  // Nth booking from this guestEmail across all confirmed bookings (1-indexed)
+  visitNumber: integer("visit_number"),
   guestNotes: text("guest_notes"),
   guestTimezone: varchar("guest_timezone", { length: 64 }).notNull(),
   guestAnswers: jsonb("guest_answers").$type<

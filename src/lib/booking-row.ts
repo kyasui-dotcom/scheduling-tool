@@ -19,6 +19,7 @@ export const BOOKING_ROW_HEADER = [
   "顧客メモ",
   "カスタム質問回答",
   "ステータス",
+  "何回目",
 ];
 
 function fmtJst(d: Date | null | undefined): string {
@@ -98,5 +99,6 @@ export function buildBookingRow(params: {
     booking.guestNotes || "",
     answersText,
     STATUS_LABEL[booking.status] || booking.status,
+    booking.visitNumber != null ? String(booking.visitNumber) : "",
   ];
 }

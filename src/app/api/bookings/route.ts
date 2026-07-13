@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { bookings, eventTypes, users } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 
 const SHEETS_WRITER_EMAIL =
   process.env.SHEETS_WRITER_EMAIL || "k.yasui@raksul.com";
@@ -257,6 +257,18 @@ export async function POST(req: NextRequest) {
     // Continue with booking even if calendar event fails
   }
 
+  // How many confirmed bookings this guestEmail already has → 何回目
+  const [{ prevCount }] = await db
+    .select({ prevCount: sql<number>`count(*)::int` })
+    .from(bookings)
+    .where(
+      and(
+        sql`LOWER(${bookings.guestEmail}) = LOWER(${data.guestEmail})`,
+        eq(bookings.status, "confirmed")
+      )
+    );
+  const visitNumber = (prevCount || 0) + 1;
+
   // Insert booking
   const [booking] = await db
     .insert(bookings)
@@ -269,6 +281,7 @@ export async function POST(req: NextRequest) {
       guestNotes: data.guestNotes,
       guestTimezone: data.guestTimezone,
       guestAnswers: data.guestAnswers,
+      visitNumber,
       startTime,
       endTime,
       meetingPlatform: eventType.meetingPlatform,
@@ -360,6 +373,7 @@ export async function POST(req: NextRequest) {
           "会議プラットフォーム",
           "予約ID",
           "予約管理URL",
+          "何回目",
         ],
         values: [
           fmtJst(booking.createdAt),
@@ -390,6 +404,7 @@ export async function POST(req: NextRequest) {
             const token = generateGuestToken(booking.id, data.guestEmail);
             return `${base}/booking-manage/${booking.id}?token=${token}`;
           })(),
+          String(visitNumber),
         ],
       });
     } catch (err) {
