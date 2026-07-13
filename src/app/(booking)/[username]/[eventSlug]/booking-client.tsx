@@ -208,15 +208,7 @@ export function BookingClient({ eventType, organizer }: Props) {
     <div className="min-h-screen py-8 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8 text-center">
-          {organizer.image && (
-            <img
-              src={organizer.image}
-              alt=""
-              className="w-12 h-12 rounded-full mx-auto mb-2"
-            />
-          )}
-          <p className="text-sm text-muted-foreground">{organizer.name}</p>
-          <h1 className="text-2xl font-bold mt-1">{eventType.title}</h1>
+          <h1 className="text-2xl font-bold">{eventType.title}</h1>
           {eventType.description && (
             <p className="text-muted-foreground mt-1">{eventType.description}</p>
           )}
