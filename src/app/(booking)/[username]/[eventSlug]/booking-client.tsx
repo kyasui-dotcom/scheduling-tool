@@ -26,6 +26,15 @@ interface Props {
     username: string;
     image: string | null;
   };
+  // Prefetched by the Server Component to skip client-side Phase 1 wait
+  initialAvailability?: {
+    timezone: string;
+    days: Array<{
+      date: string;
+      slots: { startTime: string; endTime: string }[];
+      windows: { startTime: string; latestStartTime: string }[];
+    }>;
+  };
 }
 
 interface TimeSlot {
@@ -45,7 +54,7 @@ interface DayData {
   windows: FlexibleWindow[];
 }
 
-export function BookingClient({ eventType, organizer }: Props) {
+export function BookingClient({ eventType, organizer, initialAvailability }: Props) {
   const router = useRouter();
   // Compute the bookable window once from props
   const bookableWindow = useMemo(() => {
@@ -74,13 +83,30 @@ export function BookingClient({ eventType, organizer }: Props) {
     startOfMonth(bookableWindow.earliest)
   );
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [cache, setCache] = useState<Map<string, DayData>>(new Map());
+  const [cache, setCache] = useState<Map<string, DayData>>(() => {
+    // Seed from server-side prefetch to eliminate the initial Google-FreeBusy wait
+    const m = new Map<string, DayData>();
+    if (initialAvailability?.days) {
+      for (const d of initialAvailability.days) {
+        m.set(d.date, { slots: d.slots || [], windows: d.windows || [] });
+      }
+    }
+    return m;
+  });
   const [loadingDates, setLoadingDates] = useState<Set<string>>(new Set());
-  const [timezone, setTimezone] = useState("Asia/Tokyo");
+  const [timezone, setTimezone] = useState(
+    initialAvailability?.timezone || "Asia/Tokyo"
+  );
   const inFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    const clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (clientTz !== timezone) {
+      // Server prefetched with a different TZ → discard seeded cache and refetch
+      setCache(new Map());
+      setTimezone(clientTz);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchDays = useCallback(
