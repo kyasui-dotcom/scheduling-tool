@@ -7,7 +7,7 @@ import {
   availabilityOverrides,
   bookings,
 } from "@/lib/db/schema";
-import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, or, gte, lte, gt, inArray, sql } from "drizzle-orm";
 import { getMultiUserFreeBusy } from "@/lib/google-calendar";
 import { addMinutes, startOfDay, endOfDay, addDays } from "date-fns";
 import { localTimeToUTC, getDayOfWeekInTimezone } from "@/lib/timezone";
@@ -400,7 +400,13 @@ export async function getAvailabilityRangeFromConfig(params: {
           .where(
             and(
               eq(bookings.eventTypeId, eventTypeId),
-              eq(bookings.status, "confirmed"),
+              or(
+                eq(bookings.status, "confirmed"),
+                and(
+                  eq(bookings.status, "held"),
+                  gt(bookings.heldUntil, sql`NOW()`)
+                )
+              ),
               gte(bookings.startTime, queryStart),
               lte(bookings.endTime, queryEnd)
             )
@@ -733,7 +739,13 @@ async function computePerUserWindows(params: {
         .where(
           and(
             eq(bookings.eventTypeId, params.eventTypeId),
-            eq(bookings.status, "confirmed"),
+            or(
+              eq(bookings.status, "confirmed"),
+              and(
+                eq(bookings.status, "held"),
+                gt(bookings.heldUntil, sql`NOW()`)
+              )
+            ),
             gte(bookings.startTime, queryStart),
             lte(bookings.endTime, queryEnd)
           )

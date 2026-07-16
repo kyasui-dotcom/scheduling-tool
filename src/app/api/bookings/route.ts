@@ -308,27 +308,68 @@ export async function POST(req: NextRequest) {
     );
   const visitNumber = (prevCount || 0) + 1;
 
-  // Insert booking
-  const [booking] = await db
-    .insert(bookings)
-    .values({
-      eventTypeId: data.eventTypeId,
-      assignedUserId,
-      guestCompanyName: data.guestCompanyName,
-      guestName: data.guestName,
-      guestEmail: data.guestEmail,
-      guestNotes: data.guestNotes,
-      guestTimezone: data.guestTimezone,
-      guestAnswers: data.guestAnswers,
-      visitNumber,
-      startTime,
-      endTime,
-      meetingPlatform: eventType.meetingPlatform,
-      meetingUrl,
-      meetingId,
-      googleCalendarEventId,
-    })
-    .returning();
+  // Insert booking — or convert an existing hold if holdId was provided.
+  let booking;
+  if (data.holdId) {
+    const [heldRow] = await db
+      .select()
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.id, data.holdId),
+          eq(bookings.status, "held"),
+          gt(bookings.heldUntil, new Date())
+        )
+      );
+    if (!heldRow) {
+      return NextResponse.json(
+        { error: "仮押さえの有効期限が切れました。再度お日時を選択してください。" },
+        { status: 409 }
+      );
+    }
+    [booking] = await db
+      .update(bookings)
+      .set({
+        assignedUserId,
+        guestCompanyName: data.guestCompanyName,
+        guestName: data.guestName,
+        guestEmail: data.guestEmail,
+        guestNotes: data.guestNotes,
+        guestTimezone: data.guestTimezone,
+        guestAnswers: data.guestAnswers,
+        visitNumber,
+        status: "confirmed",
+        heldUntil: null,
+        meetingPlatform: eventType.meetingPlatform,
+        meetingUrl,
+        meetingId,
+        googleCalendarEventId,
+        updatedAt: new Date(),
+      })
+      .where(eq(bookings.id, data.holdId))
+      .returning();
+  } else {
+    [booking] = await db
+      .insert(bookings)
+      .values({
+        eventTypeId: data.eventTypeId,
+        assignedUserId,
+        guestCompanyName: data.guestCompanyName,
+        guestName: data.guestName,
+        guestEmail: data.guestEmail,
+        guestNotes: data.guestNotes,
+        guestTimezone: data.guestTimezone,
+        guestAnswers: data.guestAnswers,
+        visitNumber,
+        startTime,
+        endTime,
+        meetingPlatform: eventType.meetingPlatform,
+        meetingUrl,
+        meetingId,
+        googleCalendarEventId,
+      })
+      .returning();
+  }
 
   // Optional: append to a Google Sheets URL configured on the event type.
   // Non-blocking — failure is logged but the booking still succeeds.

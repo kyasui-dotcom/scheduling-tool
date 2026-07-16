@@ -200,7 +200,7 @@ export function BookingClient({ eventType, organizer, initialAvailability }: Pro
   const slots = dayData?.slots || [];
   const windows = dayData?.windows || [];
 
-  function navigateToConfirm(startIso: string) {
+  async function navigateToConfirm(startIso: string) {
     const params = new URLSearchParams({
       slot: startIso,
       timezone,
@@ -235,10 +235,34 @@ export function BookingClient({ eventType, organizer, initialAvailability }: Pro
         if (match?.availableUserIds) candidates = match.availableUserIds;
       }
     }
+    let chosenAssignee: string | null = null;
     if (candidates.length > 0) {
-      const chosen =
+      chosenAssignee =
         candidates[Math.floor(Math.random() * candidates.length)];
-      params.set("assignee", chosen);
+      params.set("assignee", chosenAssignee);
+    }
+
+    // 仮押さえ: 選択の瞬間にサーバー側で hold を取り、他の予約者を弾く
+    if (chosenAssignee) {
+      try {
+        const holdRes = await fetch("/api/bookings/hold", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventTypeId: eventType.id,
+            startTime: startIso,
+            assignedUserId: chosenAssignee,
+            guestTimezone: timezone,
+          }),
+        });
+        if (holdRes.ok) {
+          const hold = await holdRes.json();
+          if (hold.holdId) params.set("hold", hold.holdId);
+        }
+        // hold 失敗 (409 など) は無視して確認画面に進む。POST時に最終検証が走る
+      } catch {
+        // ネットワークエラーも無視
+      }
     }
 
     const urlParams = new URLSearchParams(window.location.search);

@@ -40,6 +40,7 @@ export default function ConfirmBookingPage({
   const rescheduleId = searchParams.get("reschedule");
   const rescheduleToken = searchParams.get("token");
   const preAssignedUserId = searchParams.get("assignee");
+  const holdId = searchParams.get("hold");
 
   const [form, setForm] = useState({
     guestCompanyName: "",
@@ -135,6 +136,7 @@ export default function ConfirmBookingPage({
           eventTypeId: eventData.eventTypeId,
           startTime: slotStart,
           assignedUserId: preAssignedUserId || undefined,
+          holdId: holdId || undefined,
           guestCompanyName: form.guestCompanyName,
           guestName: form.guestName,
           guestEmail: form.guestEmail,

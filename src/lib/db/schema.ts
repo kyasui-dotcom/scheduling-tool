@@ -38,6 +38,7 @@ export const bookingStatusEnum = pgEnum("booking_status", [
   "confirmed",
   "cancelled",
   "rescheduled",
+  "held",
 ]);
 
 export const dayOfWeekEnum = pgEnum("day_of_week", [
@@ -288,6 +289,9 @@ export const bookings = pgTable("booking", {
   startTime: timestamp("start_time", { withTimezone: true }).notNull(),
   endTime: timestamp("end_time", { withTimezone: true }).notNull(),
   status: bookingStatusEnum("status").notNull().default("confirmed"),
+  // For status='held': lock expiration time. Availability engine treats
+  // held bookings as busy while now() < held_until.
+  heldUntil: timestamp("held_until", { withTimezone: true }),
   meetingPlatform: meetingPlatformEnum("meeting_platform"),
   meetingUrl: text("meeting_url"),
   meetingId: text("meeting_id"),
