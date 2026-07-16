@@ -39,6 +39,7 @@ export default function ConfirmBookingPage({
   const timezone = searchParams.get("timezone") || "Asia/Tokyo";
   const rescheduleId = searchParams.get("reschedule");
   const rescheduleToken = searchParams.get("token");
+  const preAssignedUserId = searchParams.get("assignee");
 
   const [form, setForm] = useState({
     guestCompanyName: "",
@@ -133,6 +134,7 @@ export default function ConfirmBookingPage({
         body: JSON.stringify({
           eventTypeId: eventData.eventTypeId,
           startTime: slotStart,
+          assignedUserId: preAssignedUserId || undefined,
           guestCompanyName: form.guestCompanyName,
           guestName: form.guestName,
           guestEmail: form.guestEmail,

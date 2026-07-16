@@ -40,11 +40,13 @@ interface Props {
 interface TimeSlot {
   startTime: string;
   endTime: string;
+  availableUserIds?: string[];
 }
 
 interface FlexibleWindow {
   startTime: string;
   latestStartTime: string;
+  availableUserIds?: string[];
 }
 
 const FLEX_STEP_MINUTES = 15;
@@ -203,6 +205,42 @@ export function BookingClient({ eventType, organizer, initialAvailability }: Pro
       slot: startIso,
       timezone,
     });
+    // Pre-decide the assignee at slot click so the final POST can skip the
+    // redundant Google FreeBusy re-check. Pick from the slot's known candidates.
+    const dayKey = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(new Date(startIso))
+      .reduce<Record<string, string>>((acc, p) => {
+        acc[p.type] = p.value;
+        return acc;
+      }, {});
+    const isoDate = `${dayKey.year}-${dayKey.month}-${dayKey.day}`;
+    const cached = cache.get(isoDate);
+    let candidates: string[] = [];
+    if (cached) {
+      if (eventType.slotMode === "fixed_slots") {
+        const match = cached.slots.find((s) => s.startTime === startIso);
+        if (match?.availableUserIds) candidates = match.availableUserIds;
+      } else {
+        const t = new Date(startIso).getTime();
+        const match = cached.windows.find(
+          (w) =>
+            t >= new Date(w.startTime).getTime() &&
+            t <= new Date(w.latestStartTime).getTime()
+        );
+        if (match?.availableUserIds) candidates = match.availableUserIds;
+      }
+    }
+    if (candidates.length > 0) {
+      const chosen =
+        candidates[Math.floor(Math.random() * candidates.length)];
+      params.set("assignee", chosen);
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const rescheduleId = urlParams.get("reschedule");
     const rescheduleToken = urlParams.get("token");

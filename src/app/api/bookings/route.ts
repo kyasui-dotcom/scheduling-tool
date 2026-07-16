@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { bookings, eventTypes, users } from "@/lib/db/schema";
-import { and, eq, desc, sql } from "drizzle-orm";
+import {
+  bookings,
+  eventTypes,
+  eventTypeMembers,
+  users,
+} from "@/lib/db/schema";
+import { and, eq, desc, sql, lt, gt } from "drizzle-orm";
 
 const SHEETS_WRITER_EMAIL =
   process.env.SHEETS_WRITER_EMAIL || "k.yasui@raksul.com";
@@ -91,78 +96,112 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Re-validate availability (race condition protection)
-  const dateStr = getDateStringInTimezone(
-    new Date(data.startTime),
-    data.guestTimezone
-  );
-  let availableUserIds: string[] | undefined;
+  const reqStart = new Date(data.startTime);
+  const reqEnd = addMinutes(reqStart, eventType.durationMinutes);
 
-  if (eventType.slotMode === "flexible_start") {
-    const flex = await isFlexibleStartAvailable({
-      eventTypeId: data.eventTypeId,
-      startTimeIso: new Date(data.startTime).toISOString(),
-      guestTimezone: data.guestTimezone,
-    });
-    if (!flex) {
-      return NextResponse.json(
-        { error: "This start time is no longer available" },
-        { status: 409 }
+  // Fast path: client pre-selected the assignee at slot click.
+  // Skip the Google FreeBusy re-check entirely — only do a cheap DB validation:
+  //  1. assignedUserId is a member of this event
+  //  2. No confirmed booking already overlaps that user's calendar
+  let assignedUserId: string | null = null;
+  if (data.assignedUserId) {
+    const [member] = await db
+      .select({ userId: eventTypeMembers.userId })
+      .from(eventTypeMembers)
+      .where(
+        and(
+          eq(eventTypeMembers.eventTypeId, data.eventTypeId),
+          eq(eventTypeMembers.userId, data.assignedUserId)
+        )
       );
+    if (member) {
+      const conflict = await db
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.assignedUserId, data.assignedUserId),
+            eq(bookings.status, "confirmed"),
+            lt(bookings.startTime, reqEnd),
+            gt(bookings.endTime, reqStart)
+          )
+        )
+        .limit(1);
+      if (conflict.length === 0) {
+        assignedUserId = data.assignedUserId;
+      }
     }
-    availableUserIds = flex.availableUserIds;
-  } else {
-    const result = await getAvailability({
-      eventTypeId: data.eventTypeId,
-      date: dateStr,
-      guestTimezone: data.guestTimezone,
-    });
-    const requestedSlot = result.slots.find(
-      (s) => s.startTime === new Date(data.startTime).toISOString()
-    );
-    if (!requestedSlot) {
-      return NextResponse.json(
-        { error: "This time slot is no longer available" },
-        { status: 409 }
-      );
-    }
-    availableUserIds = requestedSlot.availableUserIds;
   }
 
-  // Determine assigned user
-  let assignedUserId: string;
-  if (
-    eventType.schedulingMode === "any_available" &&
-    availableUserIds &&
-    availableUserIds.length > 1
-  ) {
-    // Defensive re-check: filter to users actually free at the requested time
-    // (window aggregation can over-report when users' free windows overlap but
-    //  the chosen instant is only free for a subset)
-    const reqStart = new Date(data.startTime);
-    const reqEnd = addMinutes(reqStart, eventType.durationMinutes);
-    const busyMap = await getMultiUserFreeBusy(
-      availableUserIds,
-      reqStart.toISOString(),
-      reqEnd.toISOString()
+  // Slow fallback path: client did not pre-select (or pre-selected invalid).
+  // Run the full availability + assignee selection like before.
+  if (!assignedUserId) {
+    const dateStr = getDateStringInTimezone(
+      new Date(data.startTime),
+      data.guestTimezone
     );
-    const reqStartMs = reqStart.getTime();
-    const reqEndMs = reqEnd.getTime();
-    const trulyFree = availableUserIds.filter((uid) => {
-      const busy = busyMap.get(uid) || [];
-      return !busy.some((b) => {
-        const bs = new Date(b.start).getTime();
-        const be = new Date(b.end).getTime();
-        return bs < reqEndMs && be > reqStartMs;
+    let availableUserIds: string[] | undefined;
+    if (eventType.slotMode === "flexible_start") {
+      const flex = await isFlexibleStartAvailable({
+        eventTypeId: data.eventTypeId,
+        startTimeIso: new Date(data.startTime).toISOString(),
+        guestTimezone: data.guestTimezone,
       });
-    });
-    const finalCandidates = trulyFree.length > 0 ? trulyFree : availableUserIds;
-    assignedUserId =
-      finalCandidates.length > 1
-        ? await selectAssignee(finalCandidates, data.eventTypeId)
-        : finalCandidates[0];
-  } else {
-    assignedUserId = availableUserIds?.[0] || eventType.userId;
+      if (!flex) {
+        return NextResponse.json(
+          { error: "This start time is no longer available" },
+          { status: 409 }
+        );
+      }
+      availableUserIds = flex.availableUserIds;
+    } else {
+      const result = await getAvailability({
+        eventTypeId: data.eventTypeId,
+        date: dateStr,
+        guestTimezone: data.guestTimezone,
+      });
+      const requestedSlot = result.slots.find(
+        (s) => s.startTime === new Date(data.startTime).toISOString()
+      );
+      if (!requestedSlot) {
+        return NextResponse.json(
+          { error: "This time slot is no longer available" },
+          { status: 409 }
+        );
+      }
+      availableUserIds = requestedSlot.availableUserIds;
+    }
+
+    if (
+      eventType.schedulingMode === "any_available" &&
+      availableUserIds &&
+      availableUserIds.length > 1
+    ) {
+      // Defensive re-check via Google FreeBusy (only when no pre-assignment)
+      const busyMap = await getMultiUserFreeBusy(
+        availableUserIds,
+        reqStart.toISOString(),
+        reqEnd.toISOString()
+      );
+      const reqStartMs = reqStart.getTime();
+      const reqEndMs = reqEnd.getTime();
+      const trulyFree = availableUserIds.filter((uid) => {
+        const busy = busyMap.get(uid) || [];
+        return !busy.some((b) => {
+          const bs = new Date(b.start).getTime();
+          const be = new Date(b.end).getTime();
+          return bs < reqEndMs && be > reqStartMs;
+        });
+      });
+      const finalCandidates =
+        trulyFree.length > 0 ? trulyFree : availableUserIds;
+      assignedUserId =
+        finalCandidates.length > 1
+          ? await selectAssignee(finalCandidates, data.eventTypeId)
+          : finalCandidates[0];
+    } else {
+      assignedUserId = availableUserIds?.[0] || eventType.userId;
+    }
   }
 
   const startTime = new Date(data.startTime);
