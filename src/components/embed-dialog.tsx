@@ -27,6 +27,10 @@ export function EmbedDialog({ username, slug, appUrl }: EmbedDialogProps) {
   const embedUrl = `${appUrl}/embed/b/${slug}`;
   const iframeCode = `<iframe src="${embedUrl}" width="${width}" height="${height}px" frameborder="0" style="border: 1px solid #e5e7eb; border-radius: 8px;"></iframe>`;
   const linkCode = `<a href="${publicUrl}" target="_blank" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;border-radius:8px;text-decoration:none;font-weight:500;">予約する</a>`;
+  const popupCode = `<button onclick="openMeetingPopup('${embedUrl}')" style="padding:12px 24px;background:#6366f1;color:#fff;border:0;border-radius:8px;font-weight:500;cursor:pointer;">予約する</button>
+<script>
+window.openMeetingPopup=function(u){var o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';o.onclick=function(e){if(e.target===o)document.body.removeChild(o)};var f=document.createElement('iframe');f.src=u;f.style.cssText='width:100%;max-width:960px;height:85vh;border:0;border-radius:12px;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.3);';var c=document.createElement('button');c.textContent='×';c.style.cssText='position:absolute;top:24px;right:24px;font-size:24px;background:#fff;border:0;border-radius:50%;width:40px;height:40px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);';c.onclick=function(){document.body.removeChild(o)};o.appendChild(f);o.appendChild(c);document.body.appendChild(o);};
+</script>`;
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
@@ -86,11 +90,36 @@ export function EmbedDialog({ username, slug, appUrl }: EmbedDialogProps) {
             </div>
           </div>
 
-          {/* Button link */}
+          {/* Popup embed */}
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold">予約ボタンリンク</h3>
+            <h3 className="text-sm font-semibold">
+              ポップアップ埋め込み（ボタン + モーダル）
+            </h3>
             <p className="text-xs text-muted-foreground">
-              サイトに予約ボタンを設置します。クリックすると予約ページが開きます。
+              サイトにボタンを設置し、クリックで予約カレンダーを**ポップアップで表示**します。ページ遷移なしで予約フローが完結。
+            </p>
+            <div className="relative">
+              <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap break-all max-h-40">
+                {popupCode}
+              </pre>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="absolute top-2 right-2"
+                onClick={() => copyToClipboard(popupCode)}
+              >
+                コピー
+              </Button>
+            </div>
+          </div>
+
+          {/* Button link (page navigation) */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold">
+              予約ボタンリンク（ページ移動）
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              サイトに予約ボタンを設置します。クリックすると別タブで予約ページが開きます。
             </p>
             <div className="relative">
               <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap break-all">
