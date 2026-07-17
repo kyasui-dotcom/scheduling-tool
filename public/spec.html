@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scheduling Tool 仕様書</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --panel: #fff;
+    --border: #e5e7eb;
+    --text: #111827;
+    --muted: #6b7280;
+    --primary: #6366f1;
+    --primary-soft: #eef2ff;
+    --success: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --code-bg: #f3f4f6;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --primary: #818cf8;
+      --primary-soft: #312e81;
+      --code-bg: #0b1220;
+      --shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --border: #334155;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --primary: #818cf8;
+    --primary-soft: #312e81;
+    --code-bg: #0b1220;
+    --shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="light"] {
+    --bg: #fafafa;
+    --panel: #fff;
+    --border: #e5e7eb;
+    --text: #111827;
+    --muted: #6b7280;
+    --primary: #6366f1;
+    --primary-soft: #eef2ff;
+    --code-bg: #f3f4f6;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 24px 80px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    line-height: 1.7;
+    font-size: 15px;
+    max-width: 100%;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .hero {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 32px;
+    box-shadow: var(--shadow);
+  }
+  .hero h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -0.01em; }
+  .hero .subtitle { color: var(--muted); margin: 0 0 16px; }
+  .hero .meta {
+    display: flex; flex-wrap: wrap; gap: 8px 16px;
+    font-size: 13px; color: var(--muted);
+    padding-top: 16px; border-top: 1px solid var(--border);
+  }
+  .hero .meta strong { color: var(--text); }
+  nav.toc {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+    box-shadow: var(--shadow);
+  }
+  nav.toc h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 20px; column-count: 2; column-gap: 32px; }
+  @media (max-width: 640px) { nav.toc ol { column-count: 1; } }
+  nav.toc a { color: var(--text); text-decoration: none; padding: 2px 0; display: inline-block; }
+  nav.toc a:hover { color: var(--primary); }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+    scroll-margin-top: 24px;
+  }
+  h2 {
+    margin: 0 0 16px;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--primary-soft);
+  }
+  h3 { margin: 24px 0 12px; font-size: 17px; color: var(--primary); }
+  h4 { margin: 16px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0; padding-left: 24px; }
+  li { margin: 4px 0; }
+  code {
+    font-family: "Menlo", "Consolas", monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin: 12px 0;
+  }
+  pre code { background: transparent; padding: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    background: var(--primary-soft);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  tbody tr:hover { background: color-mix(in srgb, var(--primary) 4%, transparent); }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .badge.get { background: #dbeafe; color: #1e40af; }
+  .badge.post { background: #d1fae5; color: #065f46; }
+  .badge.patch { background: #fef3c7; color: #92400e; }
+  .badge.delete { background: #fee2e2; color: #991b1b; }
+  .badge.put { background: #fce7f3; color: #9d174d; }
+  @media (prefers-color-scheme: dark) {
+    .badge.get { background: #1e3a8a; color: #bfdbfe; }
+    .badge.post { background: #064e3b; color: #a7f3d0; }
+    .badge.patch { background: #78350f; color: #fde68a; }
+    .badge.delete { background: #7f1d1d; color: #fecaca; }
+    .badge.put { background: #831843; color: #fbcfe8; }
+  }
+  .flow {
+    padding: 16px 20px;
+    background: var(--code-bg);
+    border-left: 3px solid var(--primary);
+    border-radius: 4px 8px 8px 4px;
+    margin: 12px 0;
+    font-family: "Menlo", monospace;
+    font-size: 12.5px;
+    white-space: pre-wrap;
+  }
+  .note {
+    background: color-mix(in srgb, var(--warn) 10%, transparent);
+    border-left: 3px solid var(--warn);
+    padding: 12px 16px;
+    border-radius: 4px 8px 8px 4px;
+    margin: 12px 0;
+    font-size: 13.5px;
+  }
+  .note.info {
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+    border-left-color: var(--primary);
+  }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: 13.5px; }
+  .kv dt { color: var(--muted); font-weight: 500; }
+  .kv dd { margin: 0; }
+</style>
+
+</head>
+<body>
+
+<div class="wrap">
+
+<div class="hero">
+  <h1>Scheduling Tool 仕様書</h1>
+  <p class="subtitle">Google Calendar と連携する複数名対応の予約管理 SaaS</p>
+  <div class="meta">
+    <div><strong>Repo:</strong> github.com/kyasui-dotcom/scheduling-tool</div>
+    <div><strong>Prod:</strong> scheduling-tool-liard.vercel.app</div>
+    <div><strong>Stack:</strong> Next.js 16 (App Router) / TypeScript / Drizzle ORM / Neon PostgreSQL / NextAuth v5 / Google Calendar API / Google Sheets API</div>
+    <div><strong>更新:</strong> 2026-07-15</div>
+  </div>
+</div>
+
+<nav class="toc">
+  <h2>目次</h2>
+  <ol>
+    <li><a href="#overview">概要とアーキテクチャ</a></li>
+    <li><a href="#auth">認証・権限</a></li>
+    <li><a href="#event">イベントタイプ設定</a></li>
+    <li><a href="#business-hours">営業日時と不在期間</a></li>
+    <li><a href="#booking-flow">予約フロー</a></li>
+    <li><a href="#hold">仮押さえ (Hold)</a></li>
+    <li><a href="#urls">URL 構造</a></li>
+    <li><a href="#booking-management">予約管理画面</a></li>
+    <li><a href="#my-bookings">個人予約ページ</a></li>
+    <li><a href="#exports">スプレッドシート排出</a></li>
+    <li><a href="#calendar-write">カレンダー / メール / Slack</a></li>
+    <li><a href="#user-defaults">ユーザーデフォルト</a></li>
+    <li><a href="#embed">埋め込みウィジェット</a></li>
+    <li><a href="#api">API リファレンス</a></li>
+    <li><a href="#schema">データベーススキーマ</a></li>
+    <li><a href="#env">環境変数</a></li>
+    <li><a href="#perf">パフォーマンス最適化</a></li>
+  </ol>
+</nav>
+
+<section id="overview">
+  <h2>1. 概要とアーキテクチャ</h2>
+  <p>Google Calendar と直接連携する社内向け予約調整ツール。Calendly ライクの体験を、複数名同席・イベント別営業時間・スプレッドシート自動出力など B2B 営業の実運用に必要な機能で拡張。</p>
+
+  <h3>技術構成</h3>
+  <table>
+    <tr><td>フロントエンド</td><td>Next.js 16 App Router / React 19 / Tailwind CSS 4 / shadcn/ui</td></tr>
+    <tr><td>認証</td><td>NextAuth v5 (Google OAuth) + Drizzle Adapter</td></tr>
+    <tr><td>データベース</td><td>Neon PostgreSQL (Serverless HTTP driver via drizzle-orm/neon-http)</td></tr>
+    <tr><td>外部 API</td><td>Google Calendar / Google Sheets / Slack Incoming Webhooks / Zoom</td></tr>
+    <tr><td>デプロイ</td><td>Vercel (GitHub 連携で自動)</td></tr>
+  </table>
+
+  <h3>ディレクトリ構成 (要点)</h3>
+<pre><code>src/
+├─ app/
+│  ├─ (booking)/         公開ページ (predicate 認証なし)
+│  │  ├─ [username]/[eventSlug]/   旧URL (後方互換)
+│  │  └─ b/[slug]/                 新URL (乱数slug)
+│  ├─ (dashboard)/       認証済みダッシュボード
+│  │  ├─ dashboard/  events/  bookings/  my-bookings/
+│  │  └─ exports/  availability/  settings/
+│  ├─ api/               全 REST API
+│  ├─ booking-manage/    ゲスト向け予約管理
+│  └─ embed/             埋め込み用 (chrome なし)
+├─ lib/
+│  ├─ auth.ts           NextAuth 設定
+│  ├─ auth-helpers.ts   同ドメイン権限判定
+│  ├─ db/               Drizzle schema / client
+│  ├─ availability-engine.ts   空き時間計算コア
+│  ├─ google-calendar.ts / google-sheets.ts / zoom.ts / slack-service.ts
+│  ├─ guest-token.ts   ゲスト用 HMAC トークン
+│  ├─ ics-generator.ts .ics ファイル生成
+│  ├─ timezone.ts / booking-row.ts / validations/
+└─ components/          共通 UI (EmbedDialog / MemberPicker / BusinessHoursEditor 等)
+public/
+└─ widget.js           埋め込み用 JS ウィジェット</code></pre>
+</section>
+
+<section id="auth">
+  <h2>2. 認証・権限</h2>
+
+  <h3>ログイン</h3>
+  <ul>
+    <li>Google OAuth (NextAuth v5)</li>
+    <li>要求スコープ: <code>openid</code> / <code>userinfo.email</code> / <code>userinfo.profile</code> / <code>calendar.events</code> / <code>calendar.freebusy</code> / <code>spreadsheets</code></li>
+    <li>初回サインイン時: <code>events.createUser</code> で username 自動生成 (email localpart) + デフォルト稼働時間 (平日 9:00-17:00) 作成</li>
+    <li>Session strategy: <code>database</code> (DrizzleAdapter)</li>
+  </ul>
+
+  <h3>権限モデル (同ドメイン共有)</h3>
+  <p>組織テーブルは持たず、<strong>メールドメインで同組織を判定</strong>。<code>lib/auth-helpers.ts</code>:</p>
+  <ul>
+    <li><code>getEmailDomain(email)</code> — @以降を lowercase 抽出</li>
+    <li><code>canManageEventsOf({viewerUserId, targetUserId})</code> — 同じ非空ドメインなら true</li>
+    <li><code>getManagedUserIds(viewerUserId)</code> — self + 同ドメイン全員の user_id 配列</li>
+  </ul>
+
+  <h3>代理管理</h3>
+  <ul>
+    <li>イベント作成時に「オーナー」を同ドメインユーザーから選択可</li>
+    <li>選択したオーナーの Google カレンダーに予約イベントが作成される</li>
+    <li>編集/削除も同ドメインなら可能</li>
+    <li>イベント一覧では「代理管理」ラベルで自他の区別を表示</li>
+  </ul>
+
+  <div class="note">
+    <strong>制限:</strong> コンシューマドメイン (gmail.com など) を allowlist/blocklist で除外する仕組みは未実装。単一組織運用を前提。
+  </div>
+</section>
+
+<section id="event">
+  <h2>3. イベントタイプ設定</h2>
+
+  <h3>3.1 基本情報</h3>
+  <table>
+    <tr><th>項目</th><th>型</th><th>説明</th></tr>
+    <tr><td>title</td><td>varchar(255)</td><td>公開表示名</td></tr>
+    <tr><td>slug</td><td>varchar(128) 乱数10文字</td><td>URL のパス部分。新規作成時に <code>crypto.getRandomValues</code> で自動生成、再生成ボタンで rotate 可</td></tr>
+    <tr><td>description</td><td>text</td><td>公開説明文 (ゲストにも表示)</td></tr>
+    <tr><td>durationMinutes</td><td>integer</td><td>所要時間</td></tr>
+    <tr><td>color</td><td>varchar(7)</td><td>UI ラベル色</td></tr>
+    <tr><td>isActive</td><td>boolean</td><td>false でリンク404</td></tr>
+    <tr><td>meetingPlatform</td><td>enum</td><td><code>google_meet</code> / <code>zoom</code> / <code>none</code></td></tr>
+  </table>
+
+  <h3>3.2 スケジューリング方式</h3>
+  <table>
+    <tr><td><code>specific_person</code></td><td>指定メンバー1人 (オーナー) の空き時間で予約</td></tr>
+    <tr><td><code>any_available</code></td><td>複数メンバーのいずれか空いてる人 → 予約時にランダムアサイン (公平抽選)</td></tr>
+    <tr><td><code>all_available</code></td><td>全メンバー空いてる時間のみ予約可</td></tr>
+  </table>
+  <p><code>any_available</code> のランダムロジック: 予約数最少のメンバー同数の中から <code>Math.random</code> で抽選 (バイアスなし・round-robin公平性維持)</p>
+
+  <h3>3.3 スロットモード</h3>
+  <table>
+    <tr><td><code>fixed_slots</code></td><td>durationMinutes 刻みの固定スロットから選択</td></tr>
+    <tr><td><code>flexible_start</code></td><td>空き時間帯の中から 15分刻みで開始時刻を自由選択</td></tr>
+  </table>
+
+  <h3>3.4 予約可能期間</h3>
+  <ul>
+    <li><strong>相対:</strong> <code>minNoticeMinutes</code> (最低通知時間) / <code>maxAdvanceDays</code> (先送り上限)</li>
+    <li><strong>絶対:</strong> <code>bookingWindowStart</code> / <code>bookingWindowEnd</code> (YYYY-MM-DD) — 設定時は相対より優先</li>
+    <li>キックオフ等「明日から6/26まで」の期間限定URL用</li>
+  </ul>
+
+  <h3>3.5 バッファ</h3>
+  <ul>
+    <li><code>bufferBeforeMinutes</code> / <code>bufferAfterMinutes</code> — 予約前後の余白</li>
+    <li>移動時間や休憩を挟む用途</li>
+  </ul>
+
+  <h3>3.6 カスタム質問</h3>
+  <p>ゲスト予約フォームに追加する質問を JSONB で保持。<code>event_type.custom_questions</code>:</p>
+  <ul>
+    <li>タイプ: <code>text</code> / <code>textarea</code> / <code>radio</code> / <code>checkbox</code> / <code>select</code> / <code>phone</code> / <code>number</code></li>
+    <li>必須フラグ / description / placeholder / options (radio 系のみ)</li>
+    <li><code>CustomQuestionEditor</code> コンポーネントで編集</li>
+  </ul>
+
+  <h3>3.7 カレンダーイベントタイトル形式</h3>
+  <p><code>calendarTitleFormat</code> (text, default <code>{title}{company}/{name}様</code>) — 自由入力テンプレート</p>
+  <ul>
+    <li>プレースホルダー: <code>{title}</code> (イベント名) / <code>{company}</code> (社名) / <code>{name}</code> (担当者名)</li>
+    <li>編集画面にリアルタイムプレビュー</li>
+    <li>旧プリセット名 <code>title_first</code> / <code>company_first</code> / <code>company_only</code> も後方互換で解釈</li>
+  </ul>
+</section>
+
+<section id="business-hours">
+  <h2>4. 営業日時と不在期間</h2>
+
+  <h3>4.1 ユーザーの週間スケジュール</h3>
+  <p><code>/availability</code> ページで設定 (<code>availability_schedule</code> + <code>availability_rules</code>)</p>
+  <ul>
+    <li>タイムゾーン (デフォルト Asia/Tokyo)</li>
+    <li>曜日ごとに 開始時刻-終了時刻 を複数設定可</li>
+    <li>全イベントのデフォルト稼働時間として使用</li>
+  </ul>
+
+  <h3>4.2 イベント別営業日時</h3>
+  <p><code>event_type.business_hours</code> (JSONB) — 設定時はユーザー週間ルールを上書き</p>
+  <pre><code>[{ dayOfWeek: "monday", startTime: "10:00", endTime: "17:00" }, ...]</code></pre>
+  <ul>
+    <li>null → ユーザーの週間スケジュール使用 (既存挙動)</li>
+    <li>[] → 全曜日で予約不可</li>
+    <li>[items] → イベント専用に上書き</li>
+  </ul>
+
+  <h3>4.3 不在期間</h3>
+  <p><code>availability_override</code> テーブル — 特定日を予約不可に</p>
+  <ul>
+    <li>日付範囲を <code>/availability</code> ページから登録</li>
+    <li>1日1行で保存、UI では連続日を range にグルーピング表示</li>
+    <li>該当日の予約フォームでは日付ボタンがグレーアウト</li>
+  </ul>
+
+  <h3>4.4 空き時間計算の優先順位</h3>
+  <div class="flow">1. availability_override (isBlocked=true)   最優先。日単位で完全ブロック
+2. event_type.business_hours               設定時はユーザー週間を上書き
+3. availability_rules (曜日ルール)         上記が両方無ければコレ
+4. Google Calendar FreeBusy                窓から busy を差し引き
+5. 既存の confirmed / held booking + buffer  更に差し引き</div>
+</section>
+
+<section id="booking-flow">
+  <h2>5. 予約フロー</h2>
+
+  <h3>5.1 ゲスト側の体験</h3>
+  <div class="flow">1. 公開URL /b/&lt;slug&gt; を開く
+     - Server Component が今日+明日の空きを prefetch → 即描画
+2. カレンダーで日付選択 → その日の空きスロットを表示
+3. スロットをクリック
+     - client 側: cache から availableUserIds → ランダムで assignee 決定
+     - POST /api/bookings/hold で 10分間の仮押さえ
+     - URL: /confirm?slot=...&amp;assignee=...&amp;hold=&lt;uuid&gt;
+4. 確認画面: 社名 / 担当者名 / メール (すべて必須) + カスタム質問
+5. POST /api/bookings で確定
+     - 仮押さえを confirmed に UPDATE (INSERT せず)
+     - createCalendarEvent → Google Calendar に予定作成
+     - Sheets 追記 / Slack 通知 (設定時)
+6. /booking-success/[bookingId] にリダイレクト
+     - .ics DL / Google Cal 追加リンク / 予約管理URL 表示</div>
+
+  <h3>5.2 予約時に必須入力</h3>
+  <ul>
+    <li>社名 (guestCompanyName)</li>
+    <li>担当者名 (guestName)</li>
+    <li>メール (guestEmail)</li>
+    <li>+ カスタム質問の required=true のもの</li>
+  </ul>
+
+  <h3>5.3 Google Calendar イベント内容</h3>
+  <ul>
+    <li>タイトル: <code>calendarTitleFormat</code> テンプレートを置換</li>
+    <li>Description: 顧客情報 / 会議URL / 顧客メモ / カスタム質問回答が全て入る</li>
+    <li>Attendees: <code>[data.guestEmail]</code> のみ、<code>responseStatus: "accepted"</code> でゲストは自動参加扱い</li>
+    <li>Reminders: 24h前 email + 30min前 popup (Google 側)</li>
+    <li>Google Meet の場合は <code>conferenceData</code> で Meet URL 自動発行</li>
+  </ul>
+
+  <h3>5.4 リスケジュール</h3>
+  <ul>
+    <li>ゲストが <code>/booking-manage/[bookingId]?token=&lt;guestToken&gt;</code> から新日時選択</li>
+    <li>元予約をキャンセルして新予約作成 (URLに <code>?reschedule=</code> + token を付与して confirm へ)</li>
+    <li>guest_token は <code>lib/guest-token.ts</code> の HMAC で生成 (改ざん防止)</li>
+  </ul>
+
+  <h3>5.5 キャンセル</h3>
+  <ul>
+    <li>ゲスト: 同じ管理URLからキャンセル理由付きで実行</li>
+    <li>担当者: <code>/bookings</code> 管理画面 → 個別予約から</li>
+    <li>Google Calendar のイベントも同時削除</li>
+  </ul>
+</section>
+
+<section id="hold">
+  <h2>6. 仮押さえ (Hold)</h2>
+  <p>日時選択の瞬間に short-lived DB ロックを取得し、他ユーザーの二重予約を防止。</p>
+
+  <h3>スキーマ</h3>
+  <ul>
+    <li><code>bookings.status</code> enum に <code>held</code> 追加</li>
+    <li><code>bookings.held_until</code> (timestamptz) — ロック期限</li>
+    <li>デフォルト <code>HOLD_MINUTES = 10</code> (定数 in <code>/api/bookings/hold/route.ts</code>)</li>
+  </ul>
+
+  <h3>availability への反映</h3>
+  <p>空き時間計算で busy と扱う条件:</p>
+  <pre><code>status = 'confirmed'
+  OR (status = 'held' AND held_until &gt; NOW())</code></pre>
+  <p>失効した held は自動的にクエリから除外され、実質解放される。cron 不要。</p>
+
+  <h3>フロー</h3>
+  <div class="flow">日時クリック
+  → POST /api/bookings/hold
+     { eventTypeId, startTime, assignedUserId, guestTimezone }
+     → 該当スロットで overlap する confirmed / active-held を確認
+     → 無ければ status='held' の row を INSERT (guestは仮の値)
+     → { holdId, heldUntil, holdMinutes: 10 }
+
+同時アクセス [ゲストB]
+  → availability クエリでは held が busy 扱い → 同枠選択不可
+
+10分以内に確定
+  → POST /api/bookings (holdId 付き)
+  → 既存 held 行を UPDATE で confirmed + 実 guest 情報に格上げ
+
+10分経過 (離脱)
+  → held_until &lt; NOW() → クエリで除外 → 実質解放</div>
+</section>
+
+<section id="urls">
+  <h2>7. URL 構造</h2>
+
+  <table>
+    <tr><th>用途</th><th>推奨</th><th>旧 (後方互換)</th></tr>
+    <tr><td>予約ページ (ゲスト)</td><td><code>/b/&lt;slug&gt;</code></td><td><code>/&lt;username&gt;/&lt;slug&gt;</code></td></tr>
+    <tr><td>予約確認</td><td><code>/b/&lt;slug&gt;/confirm</code></td><td><code>/&lt;username&gt;/&lt;slug&gt;/confirm</code></td></tr>
+    <tr><td>iframe 埋め込み</td><td><code>/embed/b/&lt;slug&gt;</code></td><td><code>/embed/&lt;username&gt;/&lt;slug&gt;</code></td></tr>
+    <tr><td>予約管理 (ゲスト)</td><td colspan="2"><code>/booking-manage/[bookingId]?token=&lt;guestToken&gt;</code></td></tr>
+    <tr><td>予約成功</td><td colspan="2"><code>/booking-success/[bookingId]</code></td></tr>
+  </table>
+
+  <p><strong>slug は 10文字ランダム</strong> (36^10 ≈ 3.6 × 10<sup>15</sup>) なのでユーザー名を含まなくても衝突しない。</p>
+
+  <h3>ダッシュボード</h3>
+  <table>
+    <tr><td><code>/dashboard</code></td><td>個人トップ (今後の予約 + イベント一覧サマリ)</td></tr>
+    <tr><td><code>/events</code></td><td>イベントタイプ一覧 (オーナーフィルタ付き)</td></tr>
+    <tr><td><code>/events/new</code> / <code>/events/[eventId]</code></td><td>新規作成 / 編集</td></tr>
+    <tr><td><code>/my-bookings</code></td><td>自分の予約 (顧客入力を詳細表示 + CSV)</td></tr>
+    <tr><td><code>/bookings</code></td><td>同ドメイン全員の予約管理 (フィルタ + ページャ + CSV)</td></tr>
+    <tr><td><code>/exports</code></td><td>スプレッドシート排出タスク管理</td></tr>
+    <tr><td><code>/availability</code></td><td>ユーザー週間スケジュール + 不在期間</td></tr>
+    <tr><td><code>/settings</code></td><td>プロフィール + イベント作成デフォルト</td></tr>
+  </table>
+</section>
+
+<section id="booking-management">
+  <h2>8. 予約管理画面 (/bookings)</h2>
+
+  <h3>表示</h3>
+  <ul>
+    <li>同ドメインメンバーの予約を横断で一覧 (<code>getManagedUserIds</code> でスコープ)</li>
+    <li>50件/ページ (<code>PAGE_SIZE = 50</code>)</li>
+    <li>各予約行の下にカスタム質問の回答を Q: A 形式でサブ行表示</li>
+  </ul>
+
+  <h3>列</h3>
+  <p>予約日時 / 開始日時 (開始-終了) / 担当 / 顧客 (社名 + 担当者名 + メール) / イベント / 状態 / 会議リンク</p>
+
+  <h3>フィルタ</h3>
+  <ul>
+    <li>スコープ: 自分のみ / 同ドメイン全員</li>
+    <li>担当者: 全員 / 個別</li>
+    <li>ステータス: confirmed / cancelled / all</li>
+    <li>開始日 from-to (絶対日付)</li>
+  </ul>
+
+  <h3>CSV エクスポート</h3>
+  <p>右上「CSV エクスポート」→ 現在のフィルタ条件を維持して <code>/api/bookings/export</code></p>
+  <ul>
+    <li>UTF-8 BOM + CRLF (Excel で日本語文字化けなし)</li>
+    <li>JST 表記</li>
+    <li>200件上限なし (該当全件)</li>
+    <li>18列: 予約作成日時 / 開始 / 終了 / 所要分 / 担当者名 / 担当者メール / 顧客社名 / 顧客担当者名 / 顧客メール / イベント名 / 会議PF / 会議URL / ステータス / キャンセル日時 / キャンセル理由 / 顧客メモ / TZ / カスタム質問回答 / 何回目</li>
+  </ul>
+</section>
+
+<section id="my-bookings">
+  <h2>9. 個人予約ページ (/my-bookings)</h2>
+  <p>自分がアサインされた予約を、お客様入力を大きく表示するカードUIで一覧。</p>
+
+  <h3>タブ</h3>
+  <ul>
+    <li>今後 (upcoming) / 過去 (past) / すべて (all)</li>
+  </ul>
+
+  <h3>カード表示</h3>
+  <ul>
+    <li>イベント名 + 日時 (JST) + 所要時間</li>
+    <li>「会議に参加」ボタン (未来分のみ、meetingUrl があれば)</li>
+    <li>お客様情報 (社名 / 担当者名 / メール / TZ)</li>
+    <li>お客様メモ (guestNotes)</li>
+    <li>カスタム質問の回答 (質問 + 説明 + 回答)</li>
+    <li>予約作成日時</li>
+  </ul>
+
+  <p>右上「CSV エクスポート」→ <code>/api/bookings/export?scope=me</code> で自分のみ出力</p>
+</section>
+
+<section id="exports">
+  <h2>10. スプレッドシート排出 (/exports)</h2>
+  <p>フィルタ条件付きの排出タスクを複数管理。手動実行で該当予約を Google Sheets に一括追記。</p>
+
+  <h3>タスクの設定項目</h3>
+  <table>
+    <tr><td>name</td><td>タスク名 (例: 週次商談レポート)</td></tr>
+    <tr><td>spreadsheetUrl</td><td>Google Sheets の URL (<code>#gid=</code> でタブ固定可)</td></tr>
+    <tr><td>sheetName</td><td>シート名 (省略時は1枚目)</td></tr>
+    <tr><td>eventTypeId</td><td>特定イベント or 全イベント</td></tr>
+    <tr><td>assigneeUserId</td><td>特定担当者 or 全員</td></tr>
+    <tr><td>status</td><td>confirmed / cancelled / all</td></tr>
+    <tr><td>daysBack</td><td>直近N日 (絶対日付より優先)</td></tr>
+    <tr><td>fromDate / toDate</td><td>絶対日付範囲</td></tr>
+    <tr><td>includeHeader</td><td>実行のたびにヘッダ行を先頭に追加</td></tr>
+    <tr><td>lastRunAt / lastRunStatus / lastRunRowCount / lastRunError</td><td>最終実行結果 (自動更新)</td></tr>
+  </table>
+
+  <h3>出力列 (15列)</h3>
+  <p>予約日時 / 開始日時 / 終了日時 / 所要分 / 担当者名 / 担当者メール / 顧客社名 / 顧客担当者名 / 顧客メール / イベント名 / 会議URL / 顧客メモ / カスタム質問回答 / ステータス / 何回目</p>
+
+  <h3>実行フロー</h3>
+  <div class="flow">POST /api/exports/[taskId]/run
+  → タスクのフィルタで bookings を SELECT
+  → buildBookingRow() で各予約を15列配列に変換
+  → includeHeader=on なら BOOKING_ROW_HEADER を先頭に追加
+  → appendRowsToSheet() で 1 API 呼び出しで一括追記
+  → last_run_* を UPDATE</div>
+
+  <h3>イベント画面との連携</h3>
+  <ul>
+    <li>イベント編集画面に「このイベントの排出タスク」カード</li>
+    <li>そのイベント (eventTypeId 一致) のタスクを一覧表示、実行/編集/削除可</li>
+    <li>「＋ 新規作成」→ <code>/exports?new=1&amp;eventTypeId=&lt;id&gt;</code> で eventTypeId プリフィル</li>
+  </ul>
+</section>
+
+<section id="calendar-write">
+  <h2>11. カレンダー / メール / Slack</h2>
+
+  <h3>11.1 Google Calendar への書き込み</h3>
+  <ul>
+    <li>予約確定時に <code>assignedUserId</code> のカレンダーに events.insert</li>
+    <li>Meet URL を自動発行 (meetingPlatform = google_meet)</li>
+    <li>ゲストは attendees + responseStatus=accepted で自動参加</li>
+    <li>他のメンバーの Google Calendar は触れない (attendee なし)</li>
+  </ul>
+
+  <h3>11.2 スプレッドシート自動追記</h3>
+  <ul>
+    <li>event_type.spreadsheetUrl が設定されていれば、予約確定と同時に1行追記</li>
+    <li>認証: <code>GOOGLE_SPREADSHEET</code> env のサービスアカウント (JSON or base64 JSON) を優先、無ければ <code>SHEETS_WRITER_EMAIL</code> ユーザーの OAuth</li>
+    <li>URL の <code>#gid=X</code> でタブ固定 (省略時は1枚目)</li>
+    <li>空タブに初回書き込み時はヘッダ16列を自動挿入</li>
+    <li>16列: 予約日時 / 開始日時 / 終了日時 / イベント名 / 社名 / 担当者名 / メール / 顧客メモ / カスタム質問回答 / 会議URL / カレンダー担当者 / カレンダー担当者メール / 所要分 / 会議PF / 予約ID / 予約管理URL</li>
+    <li>失敗しても予約は成立 (try/catch non-blocking)</li>
+  </ul>
+
+  <h3>11.3 Slack 通知</h3>
+  <p>予約確定時に webhook で通知。優先順位 3段:</p>
+  <ol>
+    <li><code>event_type.slack_webhook_url</code> (イベント個別)</li>
+    <li><code>process.env.WEBHOOKURL</code> (全体フォールバック)</li>
+    <li>両方未設定 → 通知なし</li>
+  </ol>
+
+  <h3>11.4 リマインダー</h3>
+  <ul>
+    <li>Google Calendar 側で 24h前 email + 30min前 popup</li>
+    <li>独自リマインダーメールは未実装 (将来拡張余地)</li>
+  </ul>
+
+  <h3>11.5 予約ID / 予約管理URL</h3>
+  <ul>
+    <li>予約ID = booking.id (UUID)</li>
+    <li>予約管理URL = <code>&lt;appUrl&gt;/booking-manage/&lt;id&gt;?token=&lt;guestToken&gt;</code></li>
+    <li>guestToken は HMAC (改ざん防止) - <code>lib/guest-token.ts</code></li>
+  </ul>
+</section>
+
+<section id="user-defaults">
+  <h2>12. ユーザーデフォルト</h2>
+  <p><code>/settings</code> の「イベント作成時のデフォルト」カードで設定。新規イベント作成時にフォームへプリセットされる。</p>
+
+  <h3>対象項目 (users テーブル)</h3>
+  <ul>
+    <li><code>defaultSlackWebhookUrl</code></li>
+    <li><code>defaultSpreadsheetUrl</code></li>
+    <li><code>defaultCalendarTitleFormat</code></li>
+  </ul>
+
+  <div class="note info">
+    Slack Webhook の実効フォールバックは <strong>イベント個別 → ユーザーデフォルト → 環境変数 WEBHOOKURL</strong> の3段になっており、Slack 通知漏れを防ぎやすい。
+  </div>
+</section>
+
+<section id="embed">
+  <h2>13. 埋め込みウィジェット</h2>
+
+  <h3>public/widget.js</h3>
+  <ul>
+    <li>1つの script タグで動作するタグ設置型ライブラリ</li>
+    <li><code>data-schedule="URL"</code> 属性のボタン → クリックでモーダル (iframe)</li>
+    <li><code>data-schedule-inline="URL"</code> 属性の div → その中にカレンダー iframe を挿入</li>
+    <li>MutationObserver で SPA の動的追加にも自動対応</li>
+    <li>ESC / 背景クリック / × ボタンでモーダル閉じる</li>
+    <li><code>window.Scheduler.popup(url)</code> / <code>Scheduler.inline(el, url)</code> の JS API</li>
+  </ul>
+
+  <h3>EmbedDialog で提供される4つのコード</h3>
+  <ol>
+    <li><strong>モーダル予約タグ</strong> — script + button (ページ遷移なし、ポップアップで予約)</li>
+    <li><strong>カレンダー表示タグ</strong> — script + div (指定要素にインライン表示)</li>
+    <li><strong>予約ボタンリンク</strong> — a タグ (別タブで予約ページ遷移)</li>
+    <li><strong>直接リンク</strong> — URL コピー</li>
+  </ol>
+  <p>イベント一覧・イベント編集画面のどちらからでも取得可能。</p>
+</section>
+
+<section id="api">
+  <h2>14. API リファレンス</h2>
+
+  <h3>認証</h3>
+  <table>
+    <tr><td><span class="badge get">GET</span> <code>/api/auth/[...nextauth]</code></td><td>NextAuth ハンドラ (自動生成)</td></tr>
+  </table>
+
+  <h3>Users</h3>
+  <table>
+    <tr><td><span class="badge get">GET</span> <code>/api/users/me</code></td><td>自分の情報 + デフォルト設定</td></tr>
+    <tr><td><span class="badge get">GET</span> <code>/api/users/search?q=</code></td><td>ユーザー検索 (メンバー追加用)</td></tr>
+    <tr><td><span class="badge get">GET</span> <code>/api/users/details?ids=</code></td><td>ユーザー詳細取得 (複数IDまとめて)</td></tr>
+    <tr><td><span class="badge get">GET</span> <code>/api/users/same-domain</code></td><td>同ドメインユーザー一覧 (owner picker用)</td></tr>
+  </table>
+
+  <h3>Settings</h3>
+  <table>
+    <tr><td><span class="badge get">GET</span> <span class="badge put">PUT</span> <code>/api/settings</code></td><td>ユーザー設定 (username / timezone / defaults)</td></tr>
+  </table>
+
+  <h3>Events</h3>
+  <table>
+    <tr><td><span class="badge get">GET</span> <code>/api/events</code></td><td>同ドメイン管理可能な event_type 一覧</td></tr>
+    <tr><td><span class="badge post">POST</span> <code>/api/events</code></td><td>作成 (ownerUserId で代理作成可)</td></tr>
+    <tr><td><span class="badge get">GET</span> <span class="badge patch">PATCH</span> <span class="badge delete">DELETE</span> <code>/api/events/[eventId]</code></td><td>個別操作 (canManageEventsOf で認可)</td></tr>
+    <tr><td><span class="badge get">GET</span> <code>/api/events/[eventId]/bookings</code></td><td>個別イベントの予約一覧</td></tr>
+    <tr><td><span class="badge get">GET</span> <code>/api/events/with-members</code></td><td>メンバー付きイベント一覧</td></tr>
+  </table>
+
+  <h3>Availability</h3>
+  <table>
+    <tr><td><span class="badge get">GET</span> <code>/api/availability?eventTypeId=&amp;date=&amp;days=&amp;timezone=</code></td><td>空きスロット (公開・days で範囲取得可)</td></tr>
+    <tr><td><span class="badge put">PUT</span> <code>/api/availability</code></td><td>ユーザーの週間スケジュール更新</td></tr>
+    <tr><td><span class="badge get">GET</span> <code>/api/availability/schedule</code></td><td>ユーザーのスケジュール取得</td></tr>
+    <tr><td><span class="badge post">POST</span> <code>/api/availability/preview</code></td><td>プレビュー用 (未保存 config でも計算)</td></tr>
+    <tr><td><span class="badge get">GET</span> <span class="badge post">POST</span> <span class="badge delete">DELETE</span> <code>/api/availability/overrides</code></td><td>不在期間 CRUD</td></tr>
+  </table>
+
+  <h3>Bookings</h3>
+  <table>
+    <tr><td><span class="badge get">GET</span> <code>/api/bookings</code></td><td>自分の予約一覧 (レガシー、詳細は /my-bookings 参照)</td></tr>
+    <tr><td><span class="badge post">POST</span> <code>/api/bookings</code></td><td>予約作成 (assignedUserId / holdId 対応で高速化)</td></tr>
+    <tr><td><span class="badge post">POST</span> <code>/api/bookings/hold</code></td><td>仮押さえ作成 (10分)</td></tr>
+    <tr><td><span class="badge get">GET</span> <span class="badge patch">PATCH</span> <span class="badge delete">DELETE</span> <code>/api/bookings/[bookingId]</code></td><td>個別操作</td></tr>
+    <tr><td><span class="badge post">POST</span> <code>/api/bookings/[bookingId]/cancel</code></td><td>キャンセル (ゲストトークン付き)</td></tr>
+    <tr><td><span class="badge get">GET</span> <code>/api/bookings/[bookingId]/ics</code></td><td>.ics ダウンロード</td></tr>
+    <tr><td><span class="badge get">GET</span> <code>/api/bookings/export?scope=&amp;status=&amp;from=&amp;to=&amp;assignee=</code></td><td>CSV エクスポート</td></tr>
+  </table>
+
+  <h3>Exports (排出タスク)</h3>
+  <table>
+    <tr><td><span class="badge get">GET</span> <span class="badge post">POST</span> <code>/api/exports</code></td><td>タスク一覧 / 新規作成</td></tr>
+    <tr><td><span class="badge get">GET</span> <span class="badge patch">PATCH</span> <span class="badge delete">DELETE</span> <code>/api/exports/[taskId]</code></td><td>個別操作</td></tr>
+    <tr><td><span class="badge post">POST</span> <code>/api/exports/[taskId]/run</code></td><td>実行 (シート追記 + last_run_* 更新)</td></tr>
+  </table>
+
+  <h3>Sheets</h3>
+  <table>
+    <tr><td><span class="badge get">GET</span> <code>/api/sheets/writer</code></td><td>招待すべきメール (service account or writer email)</td></tr>
+  </table>
+
+  <h3>Booking Info (公開)</h3>
+  <table>
+    <tr><td><span class="badge get">GET</span> <code>/api/booking-info?slug=&amp;username=</code></td><td>予約フォーム用のイベント情報 (username 省略で slug のみ検索)</td></tr>
+  </table>
+
+  <h3>Admin</h3>
+  <table>
+    <tr><td><span class="badge get">GET</span> <code>/api/admin/backfill-visit-numbers</code></td><td>visit_number 埋め戻し (認証必須、冪等)</td></tr>
+  </table>
+</section>
+
+<section id="schema">
+  <h2>15. データベーススキーマ</h2>
+
+  <h3>認証テーブル (NextAuth)</h3>
+  <ul>
+    <li><code>user</code> (id, name, email unique, emailVerified, image, username unique, timezone, <strong>defaultSlackWebhookUrl</strong>, <strong>defaultSpreadsheetUrl</strong>, <strong>defaultCalendarTitleFormat</strong>, createdAt, updatedAt)</li>
+    <li><code>account</code> — OAuth トークン (Google refresh_token, access_token, expires_at)</li>
+    <li><code>session</code>, <code>verificationToken</code></li>
+  </ul>
+
+  <h3>event_type</h3>
+  <ul>
+    <li>id (uuid PK), userId (owner)</li>
+    <li>title, slug (varchar128), description, durationMinutes</li>
+    <li>meetingPlatform, schedulingMode, slotMode</li>
+    <li>color, isActive, bufferBeforeMinutes, bufferAfterMinutes</li>
+    <li>minNoticeMinutes, maxAdvanceDays</li>
+    <li><strong>bookingWindowStart / bookingWindowEnd</strong> (text YYYY-MM-DD, nullable)</li>
+    <li><strong>calendarTitleFormat</strong> (text, default "{title}{company}/{name}様")</li>
+    <li><strong>businessHours</strong> (jsonb, nullable)</li>
+    <li><strong>spreadsheetUrl</strong> (text, nullable)</li>
+    <li><strong>slackWebhookUrl</strong> (text, nullable)</li>
+    <li>customQuestions (jsonb)</li>
+    <li>createdAt, updatedAt</li>
+    <li>UNIQUE(userId, slug)</li>
+  </ul>
+
+  <h3>event_type_member</h3>
+  <ul>
+    <li>id, eventTypeId → event_type, userId → user</li>
+    <li>isRequired</li>
+    <li>UNIQUE(eventTypeId, userId)</li>
+  </ul>
+
+  <h3>availability_schedule / availability_rule / availability_override</h3>
+  <ul>
+    <li>schedule: id, userId, name, isDefault, timezone</li>
+    <li>rule: id, scheduleId, dayOfWeek enum, startTime, endTime</li>
+    <li>override: id, userId, date, startTime nullable, endTime nullable, isBlocked</li>
+  </ul>
+
+  <h3>booking</h3>
+  <ul>
+    <li>id (uuid PK), eventTypeId, assignedUserId</li>
+    <li>guestCompanyName, guestName, guestEmail, guestNotes, guestTimezone, guestAnswers (jsonb)</li>
+    <li><strong>visitNumber</strong> (int, nullable) — 同メールの何回目確定予約か</li>
+    <li>startTime, endTime</li>
+    <li>status enum: <code>confirmed</code> / <code>cancelled</code> / <code>rescheduled</code> / <code>held</code></li>
+    <li><strong>heldUntil</strong> (timestamptz, nullable) — held 用ロック期限</li>
+    <li>meetingPlatform, meetingUrl, meetingId, googleCalendarEventId</li>
+    <li>cancelledAt, cancellationReason</li>
+    <li>createdAt, updatedAt</li>
+  </ul>
+
+  <h3>export_task</h3>
+  <ul>
+    <li>id (uuid PK), ownerUserId</li>
+    <li>name, spreadsheetUrl, sheetName nullable</li>
+    <li>eventTypeId nullable, assigneeUserId nullable</li>
+    <li>status ("confirmed" / "cancelled" / "all"), daysBack nullable, fromDate/toDate nullable</li>
+    <li>includeHeader</li>
+    <li>lastRunAt, lastRunStatus, lastRunError, lastRunRowCount</li>
+  </ul>
+</section>
+
+<section id="env">
+  <h2>16. 環境変数</h2>
+
+  <table>
+    <tr><th>変数</th><th>用途</th><th>必須</th></tr>
+    <tr><td><code>DATABASE_URL</code></td><td>Neon PostgreSQL 接続文字列</td><td>✓</td></tr>
+    <tr><td><code>AUTH_SECRET</code></td><td>NextAuth JWT secret</td><td>✓</td></tr>
+    <tr><td><code>AUTH_GOOGLE_ID</code> / <code>AUTH_GOOGLE_SECRET</code></td><td>Google OAuth Client</td><td>✓</td></tr>
+    <tr><td><code>NEXT_PUBLIC_APP_URL</code></td><td>公開URL (予約管理URL 生成等)</td><td>推奨</td></tr>
+    <tr><td><code>GOOGLE_SPREADSHEET</code></td><td>Sheets 書き込み用サービスアカウント JSON (raw or base64)</td><td>任意</td></tr>
+    <tr><td><code>SHEETS_WRITER_EMAIL</code></td><td>env 未設定時のフォールバック writer (デフォルト <code>k.yasui@raksul.com</code>)</td><td>任意</td></tr>
+    <tr><td><code>WEBHOOKURL</code></td><td>Slack 通知の全体フォールバック</td><td>任意</td></tr>
+    <tr><td><code>ZOOM_*</code></td><td>Zoom API 認証情報 (Zoom 使う場合)</td><td>任意</td></tr>
+  </table>
+</section>
+
+<section id="perf">
+  <h2>17. パフォーマンス最適化</h2>
+
+  <h3>17.1 サーバーサイド Prefetch</h3>
+  <ul>
+    <li>公開予約ページ (<code>/b/[slug]</code> 等) の Server Component が今日+明日の空きを事前計算</li>
+    <li>BookingClient は <code>initialAvailability</code> prop から cache を seed</li>
+    <li>マウント時の初回 fetch を省略 → 初回描画が Google FreeBusy 待ちなく即時</li>
+  </ul>
+
+  <h3>17.2 スロット選択時 pre-assign + 仮押さえ</h3>
+  <ul>
+    <li>クライアント: cache から availableUserIds → ランダムで assignee 決定</li>
+    <li><code>/api/bookings/hold</code> で 10分間ロック</li>
+    <li>POST /api/bookings は <code>holdId + assignedUserId</code> を受け取り、Google FreeBusy 再検証をスキップ</li>
+    <li>予約確定時間を体感で 1秒以上短縮</li>
+  </ul>
+
+  <h3>17.3 空き時間計算の高速化</h3>
+  <ul>
+    <li><code>getAvailabilityRangeFromConfig</code>: N日をまとめて 1回で計算</li>
+    <li>FreeBusy: 全ユーザー並列 (Promise.all), 期間は 1 API 呼び出しでカバー</li>
+    <li>schedules / rules / overrides / bookings は inArray でバッチ取得</li>
+    <li>7日分プレビューでも Google API 呼び出しは N ユーザー分のみ (以前の 7N から削減)</li>
+  </ul>
+
+  <h3>17.4 プレビュー API での並列プリフェッチ (ブッキング画面)</h3>
+  <ul>
+    <li>Phase1: 今日+翌日を初期表示のために取得</li>
+    <li>Phase2: 表示中の月全体をバックグラウンド取得</li>
+    <li>ホバー時: 未キャッシュ日を先取り</li>
+  </ul>
+
+  <h3>17.5 Sheets 追記の非同期性</h3>
+  <ul>
+    <li>予約 INSERT 後に Sheets append 失敗しても予約は成立 (try/catch)</li>
+    <li>スループット重視 (完全性は排出タスクの手動実行でカバー)</li>
+  </ul>
+</section>
+
+<div style="text-align:center; margin-top: 48px; color: var(--muted); font-size: 12px;">
+  Scheduling Tool 仕様書 — 2026-07-15
+</div>
+
+</div>
+</body>
+</html>
