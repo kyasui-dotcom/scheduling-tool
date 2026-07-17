@@ -22,6 +22,7 @@ import {
   type BusinessHour,
 } from "@/components/business-hours-editor";
 import { CustomQuestionEditor } from "@/components/custom-question-editor";
+import { EmbedDialog } from "@/components/embed-dialog";
 import type { CustomQuestion } from "@/lib/validations/event";
 import { toast } from "sonner";
 
@@ -286,7 +287,20 @@ export default function EditEventPage({
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">イベントタイプを編集</h1>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <h1 className="text-2xl font-bold">イベントタイプを編集</h1>
+          {form.slug && (
+            <EmbedDialog
+              username=""
+              slug={form.slug}
+              appUrl={
+                typeof window !== "undefined"
+                  ? window.location.origin
+                  : process.env.NEXT_PUBLIC_APP_URL || ""
+              }
+            />
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
