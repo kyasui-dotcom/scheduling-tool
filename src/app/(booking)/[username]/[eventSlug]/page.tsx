@@ -2,9 +2,7 @@ import { db } from "@/lib/db";
 import { users, eventTypes } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { BookingClient, type InitialAvailability } from "./booking-client";
-import { getAvailabilityRange } from "@/lib/availability-engine";
-import { format } from "date-fns";
+import { BookingClient } from "./booking-client";
 
 export default async function BookingPage({
   params,
@@ -29,27 +27,8 @@ export default async function BookingPage({
   if (!row) notFound();
   const { eventType, user } = row;
 
-  const prefetchTz = user.timezone || "Asia/Tokyo";
-  const initialAvailability: Promise<InitialAvailability | undefined> =
-    getAvailabilityRange({
-      eventTypeId: eventType.id,
-      startDate: format(new Date(), "yyyy-MM-dd"),
-      days: 2,
-      guestTimezone: prefetchTz,
-    })
-      .then((range) => ({
-        timezone: prefetchTz,
-        days: range.map((r) => ({
-          date: r.date,
-          slots: r.slots,
-          windows: r.windows,
-        })),
-      }))
-      .catch(() => undefined);
-
   return (
     <BookingClient
-      initialAvailability={initialAvailability}
       eventType={{
         id: eventType.id,
         title: eventType.title,

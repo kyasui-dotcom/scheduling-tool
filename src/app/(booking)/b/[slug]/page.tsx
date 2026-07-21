@@ -2,18 +2,14 @@ import { db } from "@/lib/db";
 import { users, eventTypes } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import {
-  BookingClient,
-  type InitialAvailability,
-} from "@/app/(booking)/[username]/[eventSlug]/booking-client";
-import { getAvailabilityRange } from "@/lib/availability-engine";
-import { format } from "date-fns";
+import { BookingClient } from "@/app/(booking)/[username]/[eventSlug]/booking-client";
 
 /**
  * Fully random public URL: /b/<random-slug>
- * Single joined query keeps TTFB to one DB round trip; the availability
- * prefetch is intentionally NOT awaited — the promise streams to the client
- * so the calendar shell paints immediately.
+ * Single joined query keeps TTFB to one DB round trip. No server-side
+ * availability prefetch: streaming an unresolved promise held the HTML
+ * stream open (~3s) and blocked first paint. The client fetches
+ * availability after the shell renders instead.
  */
 export default async function BookingBySlugPage({
   params,
@@ -32,27 +28,8 @@ export default async function BookingBySlugPage({
   if (!row) notFound();
   const { eventType, user } = row;
 
-  const prefetchTz = user.timezone || "Asia/Tokyo";
-  const initialAvailability: Promise<InitialAvailability | undefined> =
-    getAvailabilityRange({
-      eventTypeId: eventType.id,
-      startDate: format(new Date(), "yyyy-MM-dd"),
-      days: 2,
-      guestTimezone: prefetchTz,
-    })
-      .then((range) => ({
-        timezone: prefetchTz,
-        days: range.map((r) => ({
-          date: r.date,
-          slots: r.slots,
-          windows: r.windows,
-        })),
-      }))
-      .catch(() => undefined);
-
   return (
     <BookingClient
-      initialAvailability={initialAvailability}
       eventType={{
         id: eventType.id,
         title: eventType.title,
