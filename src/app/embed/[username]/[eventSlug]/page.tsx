@@ -2,7 +2,10 @@ import { db } from "@/lib/db";
 import { users, eventTypes } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { BookingClient } from "@/app/(booking)/[username]/[eventSlug]/booking-client";
+import {
+  BookingClient,
+  type InitialAvailability,
+} from "@/app/(booking)/[username]/[eventSlug]/booking-client";
 import { getAvailabilityRange } from "@/lib/availability-engine";
 import { format } from "date-fns";
 
@@ -13,55 +16,39 @@ export default async function EmbedPage({
 }) {
   const { username, eventSlug } = await params;
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, username));
-
-  if (!user) notFound();
-
-  const [eventType] = await db
-    .select()
+  const [row] = await db
+    .select({ eventType: eventTypes, user: users })
     .from(eventTypes)
+    .innerJoin(users, eq(users.id, eventTypes.userId))
     .where(
       and(
-        eq(eventTypes.userId, user.id),
+        eq(users.username, username),
         eq(eventTypes.slug, eventSlug),
         eq(eventTypes.isActive, true)
       )
-    );
+    )
+    .limit(1);
 
-  if (!eventType) notFound();
+  if (!row) notFound();
+  const { eventType, user } = row;
 
   const prefetchTz = user.timezone || "Asia/Tokyo";
-  let initialAvailability:
-    | {
-        timezone: string;
-        days: Array<{
-          date: string;
-          slots: { startTime: string; endTime: string }[];
-          windows: { startTime: string; latestStartTime: string }[];
-        }>;
-      }
-    | undefined;
-  try {
-    const range = await getAvailabilityRange({
+  const initialAvailability: Promise<InitialAvailability | undefined> =
+    getAvailabilityRange({
       eventTypeId: eventType.id,
       startDate: format(new Date(), "yyyy-MM-dd"),
       days: 2,
       guestTimezone: prefetchTz,
-    });
-    initialAvailability = {
-      timezone: prefetchTz,
-      days: range.map((r) => ({
-        date: r.date,
-        slots: r.slots,
-        windows: r.windows,
-      })),
-    };
-  } catch {
-    // best-effort
-  }
+    })
+      .then((range) => ({
+        timezone: prefetchTz,
+        days: range.map((r) => ({
+          date: r.date,
+          slots: r.slots,
+          windows: r.windows,
+        })),
+      }))
+      .catch(() => undefined);
 
   return (
     <BookingClient

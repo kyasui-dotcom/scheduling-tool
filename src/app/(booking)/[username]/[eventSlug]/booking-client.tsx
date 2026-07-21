@@ -26,15 +26,22 @@ interface Props {
     username: string;
     image: string | null;
   };
-  // Prefetched by the Server Component to skip client-side Phase 1 wait
-  initialAvailability?: {
-    timezone: string;
-    days: Array<{
-      date: string;
-      slots: { startTime: string; endTime: string }[];
-      windows: { startTime: string; latestStartTime: string }[];
-    }>;
-  };
+  // Prefetch started by the Server Component but NOT awaited there — the page
+  // HTML flushes immediately and this promise resolves over the RSC stream.
+  initialAvailability?: Promise<InitialAvailability | undefined>;
+}
+
+export interface InitialAvailability {
+  timezone: string;
+  days: Array<{
+    date: string;
+    slots: { startTime: string; endTime: string; availableUserIds?: string[] }[];
+    windows: {
+      startTime: string;
+      latestStartTime: string;
+      availableUserIds?: string[];
+    }[];
+  }>;
 }
 
 interface TimeSlot {
@@ -85,29 +92,43 @@ export function BookingClient({ eventType, organizer, initialAvailability }: Pro
     startOfMonth(bookableWindow.earliest)
   );
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [cache, setCache] = useState<Map<string, DayData>>(() => {
-    // Seed from server-side prefetch to eliminate the initial Google-FreeBusy wait
-    const m = new Map<string, DayData>();
-    if (initialAvailability?.days) {
-      for (const d of initialAvailability.days) {
-        m.set(d.date, { slots: d.slots || [], windows: d.windows || [] });
-      }
-    }
-    return m;
-  });
+  const [cache, setCache] = useState<Map<string, DayData>>(new Map());
   const [loadingDates, setLoadingDates] = useState<Set<string>>(new Set());
-  const [timezone, setTimezone] = useState(
-    initialAvailability?.timezone || "Asia/Tokyo"
-  );
+  const [timezone, setTimezone] = useState("Asia/Tokyo");
   const inFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    const clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (clientTz !== timezone) {
-      // Server prefetched with a different TZ → discard seeded cache and refetch
-      setCache(new Map());
-      setTimezone(clientTz);
-    }
+    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  }, []);
+
+  // Consume the server prefetch when it arrives over the RSC stream.
+  // Seed only cache misses so fresher client fetches are never overwritten,
+  // and only when the prefetch TZ matches the client TZ.
+  useEffect(() => {
+    if (!initialAvailability) return;
+    let alive = true;
+    Promise.resolve(initialAvailability)
+      .then((data) => {
+        if (!alive || !data?.days?.length) return;
+        const clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (data.timezone !== clientTz) return;
+        setCache((prev) => {
+          const next = new Map(prev);
+          for (const d of data.days) {
+            if (!next.has(d.date)) {
+              next.set(d.date, {
+                slots: d.slots || [],
+                windows: d.windows || [],
+              });
+            }
+          }
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

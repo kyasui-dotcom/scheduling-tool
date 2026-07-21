@@ -2,15 +2,18 @@ import { db } from "@/lib/db";
 import { users, eventTypes } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { BookingClient } from "@/app/(booking)/[username]/[eventSlug]/booking-client";
+import {
+  BookingClient,
+  type InitialAvailability,
+} from "@/app/(booking)/[username]/[eventSlug]/booking-client";
 import { getAvailabilityRange } from "@/lib/availability-engine";
 import { format } from "date-fns";
 
 /**
  * Fully random public URL: /b/<random-slug>
- * Resolves an event solely by its slug (no username involved).
- * Slugs are random 10-char alphanumeric so collisions across users are
- * astronomically rare; we still LIMIT 1 to be safe.
+ * Single joined query keeps TTFB to one DB round trip; the availability
+ * prefetch is intentionally NOT awaited — the promise streams to the client
+ * so the calendar shell paints immediately.
  */
 export default async function BookingBySlugPage({
   params,
@@ -19,52 +22,33 @@ export default async function BookingBySlugPage({
 }) {
   const { slug } = await params;
 
-  const [eventType] = await db
-    .select()
+  const [row] = await db
+    .select({ eventType: eventTypes, user: users })
     .from(eventTypes)
+    .innerJoin(users, eq(users.id, eventTypes.userId))
     .where(and(eq(eventTypes.slug, slug), eq(eventTypes.isActive, true)))
     .limit(1);
 
-  if (!eventType) notFound();
+  if (!row) notFound();
+  const { eventType, user } = row;
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, eventType.userId));
-
-  if (!user) notFound();
-
-  // Server-side prefetch for the first 2 days so the calendar renders with
-  // data on the very first paint (skips the client's Phase-1 Google FreeBusy wait).
   const prefetchTz = user.timezone || "Asia/Tokyo";
-  let initialAvailability:
-    | {
-        timezone: string;
-        days: Array<{
-          date: string;
-          slots: { startTime: string; endTime: string }[];
-          windows: { startTime: string; latestStartTime: string }[];
-        }>;
-      }
-    | undefined;
-  try {
-    const range = await getAvailabilityRange({
+  const initialAvailability: Promise<InitialAvailability | undefined> =
+    getAvailabilityRange({
       eventTypeId: eventType.id,
       startDate: format(new Date(), "yyyy-MM-dd"),
       days: 2,
       guestTimezone: prefetchTz,
-    });
-    initialAvailability = {
-      timezone: prefetchTz,
-      days: range.map((r) => ({
-        date: r.date,
-        slots: r.slots,
-        windows: r.windows,
-      })),
-    };
-  } catch {
-    // Prefetch is best-effort; client will fetch on mount if this fails
-  }
+    })
+      .then((range) => ({
+        timezone: prefetchTz,
+        days: range.map((r) => ({
+          date: r.date,
+          slots: r.slots,
+          windows: r.windows,
+        })),
+      }))
+      .catch(() => undefined);
 
   return (
     <BookingClient
@@ -83,7 +67,6 @@ export default async function BookingBySlugPage({
       }}
       organizer={{
         name: user.name || slug,
-        // Reused by legacy navigation code but unused in this path
         username: user.username || slug,
         image: user.image,
       }}
