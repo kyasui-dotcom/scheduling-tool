@@ -141,6 +141,10 @@ export function BookingClient({ eventType, organizer }: Props) {
   // Prefetch the bookable portion of the currently displayed month whenever
   // the user navigates months. Clamped to bookable window so we never query
   // dates that are definitively unbookable.
+  // Two-stage on first load: a small 2-day request first (short FreeBusy
+  // range → fast response, earliest days fill in quickly), then the full
+  // month in the background.
+  const firstLoadRef = useRef(true);
   useEffect(() => {
     if (!timezone) return;
     const monthStart = startOfMonth(currentMonth);
@@ -156,7 +160,18 @@ export function BookingClient({ eventType, organizer }: Props) {
     if (end.getTime() < start.getTime()) return;
     const days = Math.min(differenceInCalendarDays(end, start) + 1, 31);
     if (days <= 0) return;
-    fetchDays(format(start, "yyyy-MM-dd"), days);
+    const startStr = format(start, "yyyy-MM-dd");
+
+    if (firstLoadRef.current && days > 3) {
+      firstLoadRef.current = false;
+      fetchDays(startStr, 2);
+      const t = setTimeout(() => {
+        fetchDays(format(addDays(start, 2), "yyyy-MM-dd"), days - 2);
+      }, 250);
+      return () => clearTimeout(t);
+    }
+    firstLoadRef.current = false;
+    fetchDays(startStr, days);
   }, [currentMonth, timezone, bookableWindow, fetchDays]);
 
   // When user selects a date: fetch immediately if not cached (jumps the queue)
